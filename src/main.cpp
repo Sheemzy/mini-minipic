@@ -101,12 +101,6 @@ int main(int argc, char *argv[]) {
 
     timers.start(timers.main_loop);
 
-#if defined(__MINIPIC_OMP__)
-#pragma omp parallel default(none) firstprivate(params) \
-  shared(subdomain, timers, backend, std::cout)
-    {
-#endif
-
       DEBUG("Start of main loop");
 
       for (unsigned int it = 1; it <= params.n_it; it++) {
@@ -114,33 +108,19 @@ int main(int argc, char *argv[]) {
         // _______________________________________________________
         // Main loop for all programming models
 
-#if defined(__MINIPIC_OMP__)
-#pragma omp single
-#endif
-          { timers.start(timers.pic_iteration); }
+          timers.start(timers.pic_iteration);
 
-// Single PIC iteration
-
+          // Single PIC iteration
           subdomain.iterate(params, timers, backend, it);
 
-#if defined(__MINIPIC_OMP__)
-#pragma omp single
-#endif
-          {
-            timers.stop(timers.pic_iteration);
-            timers.start(timers.diags);
-          }
-
+          timers.stop(timers.pic_iteration);
+          timers.start(timers.diags);
+          
           // Diagnostics
           subdomain.diagnostics(params, timers, backend, it);
-#if defined(__MINIPIC_OMP__)
-#pragma omp single
-#endif
-          { timers.stop(timers.diags); }
 
-#if defined(__MINIPIC_OMP__)
-#pragma omp single // single nowait
-#endif
+          timers.stop(timers.diags);
+
           {
             if (!(it % params.print_period)) {
 
@@ -166,10 +146,6 @@ int main(int argc, char *argv[]) {
           }
 
       } // end main loop
-
-#if defined(__MINIPIC_OMP__)
-    } // end parallel region
-#endif
 
     DEBUG("End of main loop");
 
