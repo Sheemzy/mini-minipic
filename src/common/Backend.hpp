@@ -42,12 +42,6 @@ public:
             [[maybe_unused]] char *argv[],
             [[maybe_unused]] const Params &params) {
 
-#if defined(__MINIPIC_OMP__)
-    number_of_threads = omp_get_max_threads();
-#else
-    number_of_threads = 1;
-#endif
-
 
 #if defined(__MINIPIC_KOKKOS_COMMON__)
 

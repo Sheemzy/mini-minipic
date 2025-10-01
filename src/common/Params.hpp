@@ -420,12 +420,6 @@ public:
 
     // _________________________________________
     // Parallelism
-    
-#if defined(__MINIPIC_OMP__)
-    number_of_threads = omp_get_max_threads();
-#else
-    number_of_threads = 1;
-#endif
 
     DEBUG("End of compute global parameters");
 

@@ -15,10 +15,6 @@
 #include <iostream>
 #include <vector>
 
-#if defined(__MINIPIC_OMP__)
-#include "omp.h"
-#endif
-
 // ________________________________________________________________________
 // Message management
 

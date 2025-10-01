@@ -16,23 +16,7 @@
 // _____________________________________________________________________
 
 // ____________________________________________________________
-// OMP and OMP task
-
-#if defined(__MINIPIC_OMP__)
-
-#include "omp.h"
-#include <atomic>
-#include <deque>
-#include <memory>
-#include <vector>
-
-#define INLINE inline __attribute__((always_inline))
-#define DEVICE_INLINE inline __attribute__((always_inline))
-
-// ____________________________________________________________
 // Kokkos
-
-#elif defined(__MINIPIC_KOKKOS_COMMON__)
 
 #include <Kokkos_Core.hpp>
 #include <Kokkos_DualView.hpp>
@@ -41,15 +25,6 @@
 
 #define INLINE inline __attribute__((always_inline))
 #define DEVICE_INLINE KOKKOS_INLINE_FUNCTION
-
-#else
-
-#include <memory>
-#include <vector>
-#define INLINE inline __attribute__((always_inline))
-#define DEVICE_INLINE inline __attribute__((always_inline))
-
-#endif
 
 // _____________________________________________________________________
 // Types
@@ -78,12 +53,7 @@ const Host host;
 const Device device;
 
 template <typename T> inline void atomicAdd(T *address, T value) {
-#if defined(__MINIPIC_OMP__)
-#pragma omp atomic update
   *address += value;
-#else
-  *address += value;
-#endif
 }
 
 } // namespace minipic

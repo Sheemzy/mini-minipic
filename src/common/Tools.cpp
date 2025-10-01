@@ -9,18 +9,6 @@
 
 #include "Tools.hpp"
 
-// _____________________________________________________________________
-//
-//! \brief Get the thread id using the activated API
-// _____________________________________________________________________
-int get_thread_id() {
-#if defined __MINIPIC_OMP__
-  return omp_get_thread_num();
-#else
-  return 0;
-#endif
-}
-
 //! Provides a Maxwell-Juttner distribution of energies
 //! \param[in] temp_over_mass temperature / mass for the Maxwell-Juttner distribution
 //! \param[in] random random number generator class
