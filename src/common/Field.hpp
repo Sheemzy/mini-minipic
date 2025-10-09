@@ -217,9 +217,8 @@ public:
   //! \param nx number of grid points in the x direction
   //! \param ny number of grid points in the y direction
   //! \param nz number of grid points in the z direction
-  //! \param v default value
   // _________________________________________________________________________________________
-  void resize(const int nx, const int ny, const int nz, const T v = 0) {
+  void resize(const int nx, const int ny, const int nz) {
     nx_m  = nx;
     ny_m  = ny;
     nz_m  = nz;
@@ -240,7 +239,7 @@ public:
   //! \param v value to set
   //! \param space space where to set the value
   // _________________________________________________________________________________________
-  template <class T_space> void fill(const mini_float v, const T_space space) {
+  template <class T_space> void fill(const mini_float v, const T_space) {
     // ---> Host case
     if constexpr (std::is_same<T_space, minipic::Host>::value) {
 #if defined(__MINIPIC_KOKKOS_NON_UNIFIED__)
@@ -287,7 +286,7 @@ public:
   //! \tparam T_space execution space
   //! \return return pointer to the first element of the data
   // _________________________________________________________________________________________
-  template <class T_space = minipic::Host> T *get_raw_pointer(const T_space space) {
+  template <class T_space = minipic::Host> T *get_raw_pointer(const T_space) {
 
     static_assert(std::is_same<T_space, minipic::Host>::value ||
                     std::is_same<T_space, minipic::Device>::value,
@@ -310,7 +309,7 @@ public:
   //
   //! \brief output the sum of data with power power
   // ____________________________________________________________
-  template <class T_space> T sum(const int power, T_space space) const {
+  template <class T_space> T sum(const int power, T_space) const {
     T sum = 0;
 
     // ---> Host case
@@ -411,7 +410,7 @@ public:
   //
   //! \brief Sync Host <-> Device
   // _________________________________________________________________________________________
-  template <class T_from, class T_to> void sync(const T_from from, const T_to to) {
+  template <class T_from, class T_to> void sync(const T_from, const T_to) {
     // ---> Host to Device
     if constexpr (std::is_same<T_from, minipic::Host>::value) {
 #if defined(__MINIPIC_KOKKOS__)

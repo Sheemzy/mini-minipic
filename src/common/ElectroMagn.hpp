@@ -136,24 +136,24 @@ public:
   // ____________________________________________________________________________
   void print_current_slice(int slice_idx) {
     std::cout << "Jx:\n";
-    for (unsigned int ix = 0; ix < nx_d_m; ix++) {
-      for (unsigned int iy = 0; iy < ny_p_m; iy++) {
+    for (int ix = 0; ix < nx_d_m; ix++) {
+      for (int iy = 0; iy < ny_p_m; iy++) {
         // printf("\t%3.4e", Jx_m(ix, iy, slice_idx));
         std::cout << Jx_m(ix, iy, slice_idx);
       }
       std::cout << ("\n");
     }
     std::cout << ("Jy:\n");
-    for (unsigned int ix = 0; ix < nx_p_m; ix++) {
-      for (unsigned int iy = 0; iy < ny_d_m; iy++) {
+    for (int ix = 0; ix < nx_p_m; ix++) {
+      for (int iy = 0; iy < ny_d_m; iy++) {
         // printf ("\t%3.4e", Jy_m(ix, iy, slice_idx));
         std::cout << Jy_m(ix, iy, slice_idx);
       }
       std::cout << ("\n");
     }
     std::cout << ("Jz:\n");
-    for (unsigned int ix = 0; ix < nx_p_m; ix++) {
-      for (unsigned int iy = 0; iy < ny_p_m; iy++) {
+    for (int ix = 0; ix < nx_p_m; ix++) {
+      for (int iy = 0; iy < ny_p_m; iy++) {
         // printf ("\t%3.4e", Jz_m(ix, iy, slice_idx));
         std::cout << Jz_m(ix, iy, slice_idx);
       }

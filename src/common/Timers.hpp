@@ -176,9 +176,8 @@ public:
   // _______________________________________________________________
   //
   //! \brief Print all timers
-  //! \param  params : parameters of the simulation
   // _______________________________________________________________
-  void print(Params params) {
+  void print() {
     double percentage;
 
     const double initialization_time = accumulated_times[first_index(initialization)];

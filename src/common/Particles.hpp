@@ -293,7 +293,7 @@ public:
   //
   //! \brief Return the total kinetic energy for this particle species
   // __________________________________________________________________________
-  template <class T_space> T get_kinetic_energy(T_space space) {
+  template <class T_space> T get_kinetic_energy(T_space) {
 
     T kinetic_energy = 0;
 

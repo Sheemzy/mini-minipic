@@ -116,7 +116,7 @@ public:
   //! \param[in] space where to keep the data when resizing (must be minipic::host or
   //! minipic::device)
   // ______________________________________________________________________
-  template <class T_space> T *get_raw_pointer(const T_space space) {
+  template <class T_space> T *get_raw_pointer(const T_space) {
 
     // Check that T_Space of Class Host or Device
     static_assert(std::is_same<T_space, minipic::Host>::value ||
@@ -154,7 +154,7 @@ public:
   //! \param[in] space where to keep the data when resizing (must be minipic::host or
   //! minipic::device)
   // ______________________________________________________________________
-  template <class T_space> void resize(const unsigned int new_size, const T_space space) {
+  template <class T_space> void resize(const unsigned int new_size, const T_space) {
 
     // Check that T_Space of Class Host or Device
     static_assert(std::is_same<T_space, minipic::Host>::value ||
@@ -204,7 +204,7 @@ public:
   //
   //! \brief fill the vector with the given value
   // ______________________________________________________________________
-  template <class T_space> void fill(const T v, const T_space space) {
+  template <class T_space> void fill(const T v, const T_space) {
     // Check that T_Space of Class Host or Device
     static_assert(std::is_same<T_space, minipic::Host>::value ||
                     std::is_same<T_space, minipic::Device>::value,
@@ -259,7 +259,7 @@ public:
   //! \param[in] power power of the sum
   //! \param[in] space where to perform the reduction (host or device)
   // _________________________________________________________
-  template <class T_space> T sum(const int power, T_space space) {
+  template <class T_space> T sum(const int power, T_space) {
     T sum = 0;
 
     // ---> Host case

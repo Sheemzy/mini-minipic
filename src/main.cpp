@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
     // ______________________________________________________
 
     timers.start(timers.diags);
-    subdomain.diagnostics(params, timers, 0);
+    subdomain.diagnostics(params, 0);
     timers.stop(timers.diags);
 
     // ______________________________________________________
@@ -103,14 +103,14 @@ int main(int argc, char *argv[]) {
       timers.start(timers.pic_iteration);
 
       // Single PIC iteration
-      subdomain.iterate(params, timers, it);
+      subdomain.iterate(params, it);
 
       timers.stop(timers.pic_iteration);
 
       timers.start(timers.diags);
 
       // Diagnostics
-      subdomain.diagnostics(params, timers, it);
+      subdomain.diagnostics(params, it);
 
     if (!(it % params.print_period)) {
 
@@ -147,7 +147,7 @@ int main(int argc, char *argv[]) {
     // ____________________________________________________
     // Print timers
 
-    timers.print(params);
+    timers.print();
 
     timers.save(params, params.n_it + 1);
 

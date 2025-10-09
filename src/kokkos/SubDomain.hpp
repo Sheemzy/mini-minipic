@@ -68,7 +68,7 @@ public:
                 << "\n"
                 << std::endl;
 
-      for (int ip = 0; ip < patches_.size(); ip++) {
+      for (size_t ip = 0; ip < patches_.size(); ip++) {
         operators::interpolate(em_, patches_[ip]);
         operators::push_momentum(patches_[ip], -0.5 * params.dt);
       }
@@ -76,10 +76,10 @@ public:
 
     // For each species, print :
     // - total number of particles
-    for (auto is = 0; is < params.species_names_.size(); ++is) {
+    for (size_t is = 0; is < params.species_names_.size(); ++is) {
       unsigned int total_number_of_particles = 0;
       double total_particle_energy           = 0;
-      for (auto idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
+      for (size_t idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
         total_number_of_particles += patches_[idx_patch].particles_m[is].size();
         total_particle_energy +=
           patches_[idx_patch].particles_m[is].get_kinetic_energy(minipic::host);
@@ -144,8 +144,8 @@ public:
     double sum_host[13]   = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     static const std::string vector_name[13] =
       {"weight", "x", "y", "z", "mx", "my", "mz", "Ex", "Ey", "Ez", "Bx", "By", "Bz"};
-    for (int ip = 0; ip < patches_.size(); ip++) {
-      for (auto is = 0; is < params.species_names_.size(); ++is) {
+    for (size_t ip = 0; ip < patches_.size(); ip++) {
+      for (size_t is = 0; is < params.species_names_.size(); ++is) {
 
         sum_host[0] += patches_[ip].particles_m[is].weight_.sum(1, minipic::host);
         sum_host[1] += patches_[ip].particles_m[is].x_.sum(1, minipic::host);
@@ -195,10 +195,9 @@ public:
   //
   //! \brief Perform a single PIC iteration
   //! \param[in] Params&  global parameters
-  //! \param[in] Timers&  timers
   //! \param[in] int it iteration number
   // ______________________________________________________________________________
-  void iterate(Params &params, Timers &timers, int it) {
+  void iterate(Params &params, int it) {
 
     if (params.current_projection || params.n_particles > 0) {
 
@@ -209,7 +208,7 @@ public:
       DEBUG("  -> stop reset current");
     }
 
-    for (int idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
+    for (size_t idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
 
       // Interpolate from global field to particles in patch
       DEBUG("  -> start interpolate for patch " << idx_patch);
@@ -265,39 +264,14 @@ public:
         // #endif
       }
 
-      // __________________________________________________________________
-      // Identify and copy in buffers particles which leave the patch
-
-      DEBUG("  -> Patch " << idx_patch << ": start identify particles to move");
-
-      if (patches_.size() > 1) {
-        operators::identify_particles_to_move(params, patches_[idx_patch]);
-      }
-
-      DEBUG("  -> Patch " << idx_patch << ": stop identify particles to move");
-
     } // end for patches
-
-    // __________________________________________________________________
-    // Exchange particles between patches
-    if (patches_.size() > 1) {
-      for (int idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
-
-        DEBUG("  -> Patch " << idx_patch << ": exchange");
-
-        operators::exchange_particles(params, patches_, idx_patch);
-
-        DEBUG("  -> Patch " << idx_patch << ": end exchange");
-
-      }
-    }
 
     // __________________________________________________________________
     // Sum all species contribution in the local and global current grids
 
     if (params.current_projection || params.n_particles > 0) {
 
-      for (int idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
+      for (size_t idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
 
         // Projection directly in the global grid
         // subdomain.patches_[idx_patch].project(param, em_);
@@ -314,7 +288,7 @@ public:
 
       }
 
-      for (int idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
+      for (size_t idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
         
         // Copy all local fields in the global fields
         DEBUG("  -> Patch " << idx_patch << ": start local 2 global");
@@ -340,7 +314,7 @@ public:
     if (params.maxwell_solver) {
 
       // Generate a laser field with an antenna
-      for (auto iantenna = 0; iantenna < params.antenna_profiles_.size(); iantenna++) {
+      for (size_t iantenna = 0; iantenna < params.antenna_profiles_.size(); iantenna++) {
         operators::antenna(params,
                            em_,
                            params.antenna_profiles_[iantenna],
@@ -371,7 +345,7 @@ public:
   //! \param[in] Timers&  timers
   //! \param[in] int it iteration number
   // ________________________________________________________________
-  void diagnostics(Params &params, Timers &timers, int it) {
+  void diagnostics(Params &params, int it) {
 
     if (params.no_diagnostics_at_init and it == 0) {
       return;
@@ -380,8 +354,8 @@ public:
     // __________________________________________________________________
     // Determine species to copy from device to host
 
-    bool need_species[params.get_species_number()];
-    for (auto is = 0; is < params.get_species_number(); ++is) {
+    bool *need_species = new bool[params.get_species_number()];
+    for (size_t is = 0; is < params.get_species_number(); ++is) {
       need_species[is] = false;
     }
 
@@ -397,18 +371,20 @@ public:
     if ((params.particle_cloud_period < params.n_it) &&
         (!(it % params.particle_cloud_period) or (it == 0))) {
 
-      for (auto is = 0; is < params.get_species_number(); ++is) {
+      for (size_t is = 0; is < params.get_species_number(); ++is) {
         need_species[is] = true;
       }
     }
 
-    for (auto is = 0; is < params.get_species_number(); ++is) {
+    for (size_t is = 0; is < params.get_species_number(); ++is) {
       if (need_species[is]) {
-        for (auto ipatch = 0; ipatch < patches_.size(); ++ipatch) {
+        for (size_t ipatch = 0; ipatch < patches_.size(); ++ipatch) {
           patches_[ipatch].particles_m[is].sync(minipic::device, minipic::host);
         }
       }
     }
+
+    delete[] need_species;
 
     if (!(it % params.field_diagnostics_period)) {
       em_.sync(minipic::device, minipic::host);
@@ -447,7 +423,7 @@ public:
     if ((params.particle_cloud_period < params.n_it) &&
         (!(it % params.particle_cloud_period) or (it == 0))) {
 
-      for (auto is = 0; is < params.get_species_number(); ++is) {
+      for (size_t is = 0; is < params.get_species_number(); ++is) {
 
         Diags::particle_cloud("cloud", params, patches_, is, it, params.particle_cloud_format);
       }
@@ -461,7 +437,7 @@ public:
 
     // Scalars diagnostics
     if (!(it % params.scalar_diagnostics_period)) {
-      for (auto is = 0; is < params.get_species_number(); ++is) {
+      for (size_t is = 0; is < params.get_species_number(); ++is) {
 
         Diags::scalars(params, patches_, is, it);
       }
@@ -482,7 +458,7 @@ public:
   // __________________________________________________________________
   unsigned int get_total_number_of_particles() {
     unsigned int total_number_of_particles = 0;
-    for (auto idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
+    for (size_t idx_patch = 0; idx_patch < patches_.size(); idx_patch++) {
       total_number_of_particles += patches_[idx_patch].get_total_number_of_particles();
     }
     return total_number_of_particles;
