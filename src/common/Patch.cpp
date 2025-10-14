@@ -566,7 +566,7 @@ void Patch::initialize_particles(Params &param) {
     for (int ip = 0; ip < param.particles_to_add_.size(); ++ip) {
       if (param.particles_to_add_[ip].is_ == is) {
 
-        const double w = param.particles_to_add_[ip].w_;
+        const double w = param.particles_to_add_[ip].weight_;
 
         const double x = param.particles_to_add_[ip].x_;
         const double y = param.particles_to_add_[ip].y_;

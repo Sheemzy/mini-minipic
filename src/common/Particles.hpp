@@ -144,10 +144,6 @@ public:
       Bz_.clear();
     }
 
-    // if (with_gamma_) {
-    //   gamma_inv_.clear();
-    // }
-
     n_particles_m = 0;
   }
 
@@ -386,7 +382,7 @@ private:
 
     for (size_t ip = 0; ip < size(); ++ip) {
       const T gamma = sqrt(1. + mx_.h(ip) * mx_.h(ip) + my_.h(ip) * my_.h(ip) + mz_.h(ip) * mz_.h(ip));
-      kinetic_energy += w_.h(ip) * (gamma - 1.);
+      kinetic_energy += weight_.h(ip) * (gamma - 1.);
     }
 
     return kinetic_energy;

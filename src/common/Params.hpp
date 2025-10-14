@@ -65,7 +65,7 @@ struct ParticleBinningProperties {
 struct Particle {
 
   unsigned int is_;
-  double w_;
+  double weight_;
   double x_;
   double y_;
   double z_;
@@ -75,7 +75,7 @@ struct Particle {
 
   //! Constructor
   Particle(unsigned int is, double w, double x, double y, double z, double mx, double my, double mz)
-    : is_(is), w_(w), x_(x), y_(y), z_(z), mx_(mx), my_(my), mz_(mz) {};
+    : is_(is), weight_(w), x_(x), y_(y), z_(z), mx_(mx), my_(my), mz_(mz) {};
 };
 
 // ___________________________________________________________________

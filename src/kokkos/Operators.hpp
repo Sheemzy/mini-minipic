@@ -722,8 +722,8 @@ auto project(Params &params, Patch &patch) -> void {
 void project(Params &params, ElectroMagn &em, Patch &patch) {
 
   device_field_t Jx_device = em.Jx_m.data_m;
-  device_field_t Jy_device = em.Jx_m.data_m;
-  device_field_t Jz_device = em.Jx_m.data_m;
+  device_field_t Jy_device = em.Jy_m.data_m;
+  device_field_t Jz_device = em.Jz_m.data_m;
 
 #if defined(__MINIPIC_KOKKOS_SCATTERVIEW__)
   // Use ScatterView
@@ -751,7 +751,6 @@ void project(Params &params, ElectroMagn &em, Patch &patch) {
   int nx_Jy = em.Jy_m.nx_m;
   int ny_Jy = em.Jy_m.ny_m;
   int nz_Jy = em.Jy_m.nz_m;
-
 #endif
 
   for (int is = 0; is < patch.n_species_m; is++) {
