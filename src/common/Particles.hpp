@@ -74,10 +74,6 @@ public:
   // ________________________________________________________
   // Host data accessors
 
-  //! \brief x accessor
-  //! \param[in] ip particle index
-  INLINE T &x_h(unsigned int ip) { return x_.h(ip); }
-
   //! \brief y accessor
   //! \param[in] ip particle index
   INLINE T &y_h(unsigned int ip) { return y_.h(ip); }
@@ -299,7 +295,7 @@ public:
     T kinetic_energy = 0;
 
     if constexpr (std::is_same<T_space, minipic::Device>::value) {
-      
+
       device_vector_t w  = weight_.data_;
       device_vector_t mx = mx_.data_;
       device_vector_t my = my_.data_;
@@ -357,7 +353,7 @@ public:
   // __________________________________________________________________________
   void print() {
     for (int ip = 0; ip < n_particles_m; ++ip) {
-      std::cerr << "" << ip << " - " << x_h(ip) << " " << y_h(ip) << " " << z_h(ip)
+      std::cerr << "" << ip << " - " << x_.h(ip) << " " << y_h(ip) << " " << z_h(ip)
                 << " mx: " << mx_h(ip) << " my: " << my_h(ip) << " mz: " << mz_h(ip) << std::endl;
     }
   }
@@ -370,12 +366,12 @@ public:
 
     for (int ip = 0; ip < n_particles_m; ++ip) {
 
-      if ((x_h(ip) <= xmin) || (x_h(ip) >= xmax) || (y_h(ip) <= ymin) || (y_h(ip) >= ymax) ||
-          (z_h(ip) <= zmin) || (z_h(ip) >= zmax)) {
+      if ((x_.h(ip) <= xmin) || (x_.h(ip) >= xmax) || (y_.h(ip) <= ymin) || (y_.h(ip) >= ymax) ||
+          (z_.h(ip) <= zmin) || (z_.h(ip) >= zmax)) {
         std::cerr << "Particle: " << ip << "/" << n_particles_m << std::endl;
-        std::cerr << " x: " << x_h(ip) << " [" << xmin << " " << xmax << "]" << std::endl;
-        std::cerr << " y: " << y_h(ip) << " [" << ymin << " " << ymax << "]" << std::endl;
-        std::cerr << " z: " << z_h(ip) << " [" << zmin << " " << zmax << "]" << std::endl;
+        std::cerr << " x: " << x_.h(ip) << " [" << xmin << " " << xmax << "]" << std::endl;
+        std::cerr << " y: " << y_.h(ip) << " [" << ymin << " " << ymax << "]" << std::endl;
+        std::cerr << " z: " << z_.h(ip) << " [" << zmin << " " << zmax << "]" << std::endl;
         std::cerr << " mx: " << mx_h(ip) << " my: " << my_h(ip) << " mz: " << mz_h(ip) << std::endl;
       }
     }
@@ -407,7 +403,7 @@ public:
 
     for (int ip = 0; ip < n_particles_m; ++ip) {
 
-      x_sum += std::abs(x_h(ip));
+      x_sum += std::abs(x_.h(ip));
       y_sum += std::abs(y_h(ip));
       z_sum += std::abs(z_h(ip));
 
