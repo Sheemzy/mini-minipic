@@ -170,7 +170,7 @@ void Patch::initialize_particles(Params &param) {
 
   const double cell_volume = param.cell_volume;
 
-  const int n_species = n_species_m;
+  const size_t n_species = n_species_m;
 
   if (n_species == 0) {
     return;
@@ -183,9 +183,8 @@ void Patch::initialize_particles(Params &param) {
   std::vector<int> particles_per_cell_counter(n_species * total_cells);
 
   // Loop over all species
-  for (int is = 0; is < n_species; ++is) {
+  for (size_t is = 0; is < n_species; ++is) {
 
-    int n_particles    = particles_m[is].size();
     double temperature = param.temp_[is];
     const double mass  = param.mass_[is];
 
@@ -197,7 +196,7 @@ void Patch::initialize_particles(Params &param) {
     unsigned int total_particles_counter = 0;
 
     // compute the species index for position init
-    int species_index_for_pos_init = 0;
+    size_t species_index_for_pos_init = 0;
     while (param.species_names_[species_index_for_pos_init] !=
              param.position_initialization_method_[is] &&
            (species_index_for_pos_init < is)) {
@@ -298,7 +297,7 @@ void Patch::initialize_particles(Params &param) {
       } // end if param.position_initialization_method_
 
       // Random Momentum init
-      for (auto ip = 0; ip < total_particles_counter; ++ip) {
+      for (size_t ip = 0; ip < total_particles_counter; ++ip) {
 
         const double energy = Maxwell_Juttner_distribution(temperature / mass, random);
 
@@ -563,7 +562,7 @@ void Patch::initialize_particles(Params &param) {
     } // pos init level
 
     // Add single particles
-    for (int ip = 0; ip < param.particles_to_add_.size(); ++ip) {
+    for (size_t ip = 0; ip < param.particles_to_add_.size(); ++ip) {
       if (param.particles_to_add_[ip].is_ == is) {
 
         const double w = param.particles_to_add_[ip].w_;

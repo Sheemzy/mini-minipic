@@ -188,6 +188,15 @@ public:
     }
   }
 
+  template <class T_from, class T_to> void sync(const T_from from, const T_to to) {
+    for (int is = 0; is < n_species_m; is++) {
+      particles_m[is].sync(from, to);
+      vec_Jx_m[is].sync(from, to);
+      vec_Jy_m[is].sync(from, to);
+      vec_Jz_m[is].sync(from, to);
+    }
+  }
+
   // __________________________________________________
   //
   //! Return the total number of particles in the patch
