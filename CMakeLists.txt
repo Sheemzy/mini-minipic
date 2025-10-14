@@ -75,9 +75,9 @@ project (minipic LANGUAGES ${LANGUAGES})
 # __________________________________________________________________
 # Sources and compile options
 
-file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/kokkos/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.cpp")
+file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/exercices/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.cpp")
 set(COMPILE_OPTIONS ${COMPILE_OPTIONS} -D__MINIPIC_KOKKOS__ -D__MINIPIC_KOKKOS_COMMON__ -D__MINIPIC_KOKKOS_NON_UNIFIED__)
-include_directories(src/setups src/common src/kokkos)
+include_directories(src/setups src/common src/exercices)
 
 find_package(Kokkos QUIET)
 if(Kokkos_FOUND)
