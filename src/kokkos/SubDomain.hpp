@@ -502,14 +502,14 @@ public:
     }
 
       // Interpolate from global field to particles in patch
-      DEBUG("  -> start interpolate for patch ");
+      DEBUG("  -> start interpolate ");
 
       operators::interpolate(em_, particles_m);
 
       DEBUG("  -> stop interpolate");
 
       // Push all particles in patch
-      DEBUG("  -> start push for patch ");
+      DEBUG("  -> start push ");
 
       operators::push(particles_m, params.dt);
 
@@ -627,7 +627,7 @@ public:
 
     for (size_t is = 0; is < params.get_species_number(); ++is) {
       if (need_species[is]) {
-          particles[is].sync(minipic::device, minipic::host);
+          particles_m[is].sync(minipic::device, minipic::host);
       }
     }
 
