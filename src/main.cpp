@@ -16,7 +16,7 @@
 #include "SubDomain.hpp"
 
 // Load a setup
-#include"default_gpu.hpp"
+#include"thermal.hpp"
 
 //! Main function
 int main(int argc, char *argv[]) {
