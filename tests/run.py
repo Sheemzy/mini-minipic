@@ -424,7 +424,8 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
     if not compile_only:
 
         # if benchmark has key threads
-        current_env = {"OMP_NUM_THREADS": str(nb_threads)}
+        current_env = os.environ.copy()
+        current_env.update({"OMP_NUM_THREADS": str(nb_threads)})
         current_env.update(env)
 
         print("")
