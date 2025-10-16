@@ -1,10 +1,4 @@
-# ________________________________________________________________________________
-#
-# Script run.py
-#
-# Runs tests for CI
-#
-# ________________________________________________________________________________
+"""Runs tests for CI"""
 
 # ________________________________________________________________________________
 # Imports
@@ -47,8 +41,7 @@ configuration_list = {
 
 config_description = "List of all configurations: \n\n"
 
-for config in configuration_list.keys():
-    config_dict = configuration_list[config]
+for config, config_dict in configuration_list.items():
     config_description += "> {}: \n".format(config)
     config_description += "    - compiler:  \n".format(config_dict["compiler"])
     config_description += "    - cmake options:  {}\n".format(config_dict["cmake"])
@@ -58,7 +51,6 @@ config_description += "    \n\n"
 
 # Command line arguments
 parser = argparse.ArgumentParser(
-    prog="Validation process",
     description="Custom arguments for the validation process",
     epilog=config_description,
     formatter_class=argparse.RawTextHelpFormatter,
@@ -67,53 +59,56 @@ parser.add_argument(
     "-g",
     "--config",
     default="kokkos",
-    help=" configuration choice: sequential, openmp (default), kokkos, kokkos_gpu",
+    help="configuration choice: kokkos (default), kokkos_gpu",
 )
-parser.add_argument("-c", "--compiler", help=" custom compiler choice")
+parser.add_argument("-c", "--compiler", help="custom compiler choice")
 parser.add_argument(
     "-b",
     "--benchmarks",
-    help=' specific benchmark, you can specify several benchmarks with a coma. for instance "default,beam"',
+    help=(
+        "specific benchmark, you can specify several benchmarks with a coma, "
+        'for instance "default,beam"'
+    ),
     default=None,
 )
-parser.add_argument("-t", "--threads", help=" default number of threads", default=None)
-parser.add_argument("-a", "--arguments", help=" default arguments", default=None)
+parser.add_argument("-t", "--threads", help="default number of threads", default=None)
+parser.add_argument("-a", "--arguments", help="default arguments", default=None)
 parser.add_argument(
-    "--clean", help=" whether to delete or not the generated files", action="store_true"
+    "--clean", help="whether to delete or not the generated files", action="store_true"
 )
 parser.add_argument(
     "--no-evaluate",
-    help=" if used, do not evaluate against the reference",
+    help="if used, do not evaluate against the reference",
     action="store_true",
 )
 parser.add_argument(
-    "--compile-only", help=" if used, only compile the tests", action="store_true"
+    "--compile-only", help="if used, only compile the tests", action="store_true"
 )
 parser.add_argument(
-    "--threshold", help=" threshold for the validation", default=1e-10, type=float
+    "--threshold", help="threshold for the validation", default=1e-10, type=float
 )
 parser.add_argument(
-    "--save-timers", help=" save the timers for each benchmark", action="store_true"
+    "--save-timers", help="save the timers for each benchmark", action="store_true"
 )
 parser.add_argument(
     "--prefix",
-    help=" add custom prefix for the execution, for instance srun",
+    help="add custom prefix for the execution, for instance srun",
     default="",
 )
 parser.add_argument(
     "--env",
-    help=" add custom environment variables for the execution, for instance `OMP_PROC_BIND=spread`",
+    help="add custom environment variables for the execution, for instance `OMP_PROC_BIND=spread`",
     default="",
 )
 parser.add_argument(
     "--device",
-    help=" select the device type to pass for cmake compilation`",
+    help="select the device type to pass for cmake compilation",
     default="",
 )
 parser.add_argument(
-    "--cmake-args", help=" add custom cmake arguments for the compilation", default=""
+    "--cmake-args", help="add custom cmake arguments for the compilation", default=""
 )
-parser.add_argument("--backend", help=" select the backend to use", default="")
+parser.add_argument("--backend", help="select the backend to use", default="")
 args = parser.parse_args()
 
 # Selected configuration
@@ -122,13 +117,13 @@ configuration = args.config
 selected_config = configuration_list[configuration].copy()
 
 # Select compiler
-if args.compiler != None:
+if args.compiler:
     selected_config["compiler"] = args.compiler
 
 clean = args.clean
 
 # Evaluate or not
-evaluate = not (args.no_evaluate)
+evaluate = not args.no_evaluate
 
 # Compile only
 compile_only = args.compile_only
@@ -137,9 +132,7 @@ compile_only = args.compile_only
 save_timers = args.save_timers
 
 # Select benchmark list
-# args.benchmark should have the form of a list of benchmarks separated by a coma like "default,beam"
-
-if args.benchmarks != None:
+if args.benchmarks:
 
     selected_config["benchmarks"] = []
 
@@ -147,7 +140,7 @@ if args.benchmarks != None:
         selected_config["benchmarks"].append(b)
 
 # Select threads
-if args.threads != None:
+if args.threads:
 
     # if args.threads is a list of threads
 
@@ -167,7 +160,7 @@ if args.threads != None:
 
 # Environment
 if args.env:
-    for local_env in env.split():
+    for local_env in args.env.split():
         key, value = local_env.split("=")
         selected_config["env"][key] = value
 
@@ -236,7 +229,7 @@ assert len(selected_config["threads"]) >= len(
 )
 # - Threads should be positive
 assert all(
-    [t > 0 for t in selected_config["threads"]]
+    t > 0 for t in selected_config["threads"]
 ), "Number of threads should be positive ({})".format(selected_config["threads"])
 
 
@@ -251,17 +244,12 @@ sys.path.append("{}/validation".format(root_dir))
 sys.path.append("{}".format(root_dir))
 
 # Terminal size
-try:
-    terminal_size = os.get_terminal_size()[0]
-except:
-    terminal_size = 80
+terminal_size = shutil.get_terminal_size().columns
 
 
-def line(size):
-    line = " "
-    for i in range(size - 1):
-        line += "_"
-    print(line)
+def print_line(size):
+    """Print a line of given size."""
+    print("".ljust(size, "-"))
 
 
 # Get the git hash in variable git_hash
@@ -283,29 +271,22 @@ try:
         .strip()
         .decode("utf-8")
     )
+
+    # get branch from detatched head
+    if git_branch == "HEAD":
+        git_branch = "detached"
 except:
     git_branch = "unknown"
 
 # Get the pipeline id in variable pipeline_id
-try:
-    pipeline_id = os.environ["CI_PIPELINE_ID"]
-except:
-    pipeline_id = "unknown"
-
-# get branch from detatched head
-if git_branch == "HEAD":
-    git_branch = "detached"
-
+pipeline_id = os.environ.get("CI_PIPELINE_ID", "unknown")
 
 # Create unique id of the form yyyymmdd_hh_mm_ss_pipeline_id_git_hash
 unique_id = time.strftime("%Y%m%d_%H:%M:%S") + "_" + pipeline_id + "_" + git_hash
 
-# timers saving path
-timers_path = "/gpfs/workdir/labotm/gitlab-ci_runs/minipic_timers/"
-
 # ________________________________________________________________________________
 # Print some info
-line(terminal_size)
+print_line(terminal_size)
 print(" VALIDATION \n")
 
 print(" Git branch: {}".format(git_branch))
@@ -359,7 +340,7 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
     bench_dir = os.path.join(working_dir, benchmark)
 
     print("")
-    line(terminal_size)
+    print_line(terminal_size)
     print("\n >>> Benchmark `{}` \n".format(benchmark))
 
     # ____________________________________________________________________________
@@ -374,7 +355,7 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
     os.chdir(bench_dir)
 
     # Copy the main from src
-    shutil.copy(os.path.join(root_dir, "src", "main.cpp"), ".")
+    shutil.copy(os.path.join(root_dir, "src", "main.cpp"), bench_dir)
 
     # Change include
     with open("main.cpp", "r") as file:
@@ -397,7 +378,7 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
 
     # Compile
 
-    cmake_command = ["cmake", "../..", "-DCMAKE_BUILD_TYPE=Release", "-DTEST=ON"]
+    cmake_command = ["cmake", root_dir, "-DCMAKE_BUILD_TYPE=Release", "-DTEST=ON"]
     if compiler:
         cmake_command.append("-DCMAKE_CXX_COMPILER={}".format(compiler))
     cmake_command.extend(cmake)
@@ -407,12 +388,12 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
     print("")
     print(" ".join(cmake_command))
 
-    subprocess.run(cmake_command)
+    subprocess.run(cmake_command, check=True)
 
-    make_command = ["cmake", "--build", ".", "--parallel", "4"]
+    make_command = ["cmake", "--build", bench_dir, "--parallel", "4"]
     print(" ".join(make_command))
 
-    subprocess.run(make_command)
+    subprocess.run(make_command, check=True)
 
     # Check
     exe_exists = os.path.exists("./{}".format(executable_name))
@@ -423,9 +404,10 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
 
     if not compile_only:
 
-        # if benchmark has key threads
-        current_env = os.environ.copy()
-        current_env.update({"OMP_NUM_THREADS": str(nb_threads)})
+        current_env = {}
+        if nb_threads:
+            # if benchmark has key threads
+            current_env.update({"OMP_NUM_THREADS": str(nb_threads)})
         current_env.update(env)
 
         print("")
@@ -442,13 +424,15 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
         env_str = " ".join("{}={}".format(k, v) for k, v in current_env.items())
         print(env_str, " ".join(run_command))
 
-        subprocess.run(run_command, check=False, env=current_env)
+        subprocess.run(run_command, check=False, env={**(os.environ), **current_env})
 
         # ____________________________________________________________________________
         # Check results
 
         # Load the corresponding module
-        if os.path.exists(root_dir + "/validation/{}.py".format(benchmark)):
+        if os.path.exists(
+            os.path.join(root_dir, "validation", "{}.py".format(benchmark))
+        ):
 
             print("")
             print("   -> Launch the validation process ")
@@ -462,7 +446,7 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
             print(
                 " \033[32mBenchmark `{}` tested with success \033[39m".format(benchmark)
             )
-            line(terminal_size)
+            print_line(terminal_size)
 
         # ____________________________________________________________________________
         # Read timers (json format)
@@ -491,14 +475,13 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
             # }
             # if the file does not exist, create it
 
-            ci_file_name = timers_path + "/ci_{}_{}_timers.json".format(
-                benchmark, configuration
+            ci_file_name = os.path.join(
+                working_dir, "ci_{}_{}_timers.json".format(benchmark, configuration)
             )
 
             if not os.path.exists(ci_file_name):
                 with open(ci_file_name, "w") as f:
                     f.write("{}")
-                f.close()
 
             with open(ci_file_name, "r") as f:
                 ci_timers_dict = json.load(f)
@@ -530,8 +513,6 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
 
             with open(ci_file_name, "w") as f:
                 json.dump(ci_timers_dict, f, indent=4)
-
-            f.close()
 
             print("    Timers saved in {}".format(ci_file_name))
 
