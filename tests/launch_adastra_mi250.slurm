@@ -10,12 +10,10 @@
 #SBATCH --constraint=MI250&turbo
 #SBATCH --cpus-per-task=16
 #SBATCH --gpus-per-node=1
-export HSA_XNACK=1
-source /lus/work/CT6/cad15863/mlobet/minipic/build_recipes/env/adastra_mi250_stdpar.sh
 
 set -x
 ulimit -c unlimited
-cd ${SLURM_SUBMIT_DIR}
+cd "${SLURM_SUBMIT_DIR}"
 
 export OMP_NUM_THREADS=16
 export OMP_PROC_BIND=CLOSE
@@ -33,4 +31,4 @@ echo "Number of Cores/Task Allocated = $SLURM_CPUS_PER_TASK"
 # ________________________________________________________________________
 # Launch the test
 
-python run.py -g kokkos_gpu --compiler="hipcc" --device="amd_mi250"
+python run.py -g gpu --compiler="hipcc" --cmake-args="-DCMAKE_BUILD_TYPE=Release -DKokkos_ENABLE_HIP=ON -DKokkos_ARCH_AMD_GFX90A=ON"

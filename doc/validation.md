@@ -7,8 +7,9 @@ A python script `run.py` located in the `tests` folder is designed to test the w
 This script needs Python libraries located in `lib`.
 
 You can access the help page by doing:
+
 ```bash
-python run.py -h
+python tests/run.py -h
 ```
 
 ### Available options:
@@ -18,16 +19,19 @@ Here is a list of available options:
 | Option | Long Option | Description |
 | --- | --- | --- |
 | `-h` | `--help` | Show this help message and exit |
-| `-g CONFIG` | `--config CONFIG` | Configuration choice: sequential, openmp (default), kokkos, kokkos_gpu, thrust |
+| `-g CONFIG` | `--config CONFIG` | Configuration choice: cpu (default), gpu |
 | `-c COMPILER` | `--compiler COMPILER` | Custom compiler choice |
 | `-b BENCHMARKS` | `--benchmarks BENCHMARKS` | Specific benchmark, you can specify several benchmarks with a coma. For instance "default,beam" |
-| `-t THREADS` | `--threads THREADS` | Default number of threads |
+| | `--build-dir` | Build directory to use, default to `build` |
 | `-a ARGUMENTS` | `--arguments ARGUMENTS` | Default arguments |
+| | `--fresh` | Whether to delete or already existing files |
 | | `--clean` | Whether to delete or not the generated files |
 | | `--no-evaluate` | If used, do not evaluate against the reference |
 | | `--compile-only` | If used, only compile the tests |
 | | `--threshold THRESHOLD` | Threshold for the validation |
 | | `--save-timers` | Save the timers for each benchmark |
+| | `--env` | Custom environment variables for the execution |
+| | `--cmake-args` | Custom CMake arguments |
 
 ### Configurations
 
@@ -35,36 +39,26 @@ Here is a list of possible configurations:
 
 | Configuration | Description | Compiler | CMake Options | Run Prefix |
 | --- | --- | --- | --- | --- |
-| sequential | | | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="sequential"` | |
-| openmp | OpenMP for version (for CPU) |  | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="openmp"` | `OMP_PROC_BIND=spread` |
-| kokkos | CPU benchmarks | | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="kokkos"` | `OMP_PROC_BIND=spread` |
-| kokkos_gpu | GPU benchmarks | | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="kokkos"` | |
-| thrust | | nvhpc | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="thrust" -DDEVICE="nvidia_v100"` | |
-| openmp_task || | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="openmp_task"` | `OMP_PROC_BIND=spread OMP_MAX_ACTIVE_LEVELS=10` |
-| openmp_target || | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="openmp_target"` | `OMP_PROC_BIND=spread OMP_MAX_ACTIVE_LEVELS=10` |
-| openacc | | nvhpc | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="openacc" -DDEVICE="nvidia_v100"` | |
-| eventify || | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="eventify"` | `KMP_AFFINITY=` |
-| thrust_a100 || | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="thrust" -DDEVICE="nvidia_a100"` | |
-| sycl | | icpx | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="sycl"` | |
-| sycl_gpu | | icpx | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="sycl" -DDEVICE="nvidia_v100"` | |
-| acpp || | `-DCMAKE_VERBOSE_MAKEFILE=ON -DBACKEND="acpp" -DDEVICE="cpu_x86"` | |
+| cpu | CPU benchmark | gcc | `-DCMAKE_VERBOSE_MAKEFILE=ON -DKokkos_ENABLE_OPENMP=ON` | `OMP_PROC_BIND=spread,OMP_NUM_THREADS=8` |
+| gpu | GPU benchmark on A100 | gcc | `-DCMAKE_VERBOSE_MAKEFILE=ON -DKokkos_ENABLE_CUDA=ON -DKokkos_ARCH_AMPERE80=ON` | |
+| gpu | GPU benchmark on V100 | gcc | `-DCMAKE_VERBOSE_MAKEFILE=ON -DKokkos_ENABLE_CUDA=ON -DKokkos_ARCH_VOLTA70=ON` | |
 
-### Usage examples:
+### Usage examples
 
-- default run
+#### Default run
 
 ```bash
-python run.py
+python tests/run.py
 ```
 
-- specific configuration
+#### Specific configuration
 
 ```bash
-python run.py -g kokkos
+python tests/run.py -g gpu
 ```
 
-- custom compiler
+#### Custom compiler
 
 ```bash
-python run.py -c clang++
+python tests/run.py -c clang++
 ```

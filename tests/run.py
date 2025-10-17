@@ -17,25 +17,32 @@ import time
 
 # Configurations for running the tests
 configuration_list = {
-    "kokkos": {
-        "compiler": "clang++",
-        "cmake": ["-DCMAKE_VERBOSE_MAKEFILE=ON", "-DCMAKE_BUILD_TYPE=Release"],
-        "env": {"OMP_PROC_BIND": "spread"},
-        "prefix": [],
-        "args": [[], [], [], ["-it", "10000"], ["-it", "10000"]],
-        "exe_name": "minipic",
-        "threads": [8, 8, 8, 1, 1],
-        "benchmarks": ["thermal", "beam", "antenna"],
-    },
-    "kokkos_gpu": {
+    "cpu": {
         "compiler": "g++",
-        "cmake": ["-DCMAKE_VERBOSE_MAKEFILE=ON", "-DCMAKE_BUILD_TYPE=Release"],
-        "env": {"OMP_PROC_BIND": "spread"},
+        "cmake": [
+            "-DCMAKE_VERBOSE_MAKEFILE=ON",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DKokkos_ENABLE_OPENMP=ON",
+        ],
+        "env": {"OMP_PROC_BIND": "spread", "OMP_NUM_THREADS": "8"},
         "prefix": [],
-        "args": [[], [], []],
         "exe_name": "minipic",
-        "threads": [1, 1, 1],
         "benchmarks": ["thermal", "beam", "antenna"],
+        "args": [[], [], []],
+    },
+    "gpu": {
+        "compiler": "g++",
+        "cmake": [
+            "-DCMAKE_VERBOSE_MAKEFILE=ON",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DKokkos_ENABLE_CUDA=ON",
+            "-DKokkos_ARCH_AMPERE80=ON",
+        ],
+        "env": {},
+        "prefix": [],
+        "exe_name": "minipic",
+        "benchmarks": ["thermal", "beam", "antenna"],
+        "args": [[], [], []],
     },
 }
 
@@ -58,8 +65,8 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "-g",
     "--config",
-    default="kokkos",
-    help="configuration choice: kokkos (default), kokkos_gpu",
+    default="cpu",
+    help="configuration choice: cpu (default), gpu",
 )
 parser.add_argument("-c", "--compiler", help="custom compiler choice")
 parser.add_argument(
@@ -71,9 +78,13 @@ parser.add_argument(
     ),
     default=None,
 )
-parser.add_argument("--build-dir", help="build directior, default to 'build'", default="build")
-parser.add_argument("-t", "--threads", help="default number of threads", default=None)
+parser.add_argument(
+    "--build-dir", help="build directior, default to 'build'", default="build"
+)
 parser.add_argument("-a", "--arguments", help="default arguments", default=None)
+parser.add_argument(
+    "--fresh", help="whether to delete or not already existing files", action="store_true"
+)
 parser.add_argument(
     "--clean", help="whether to delete or not the generated files", action="store_true"
 )
@@ -102,14 +113,8 @@ parser.add_argument(
     default="",
 )
 parser.add_argument(
-    "--device",
-    help="select the device type to pass for cmake compilation",
-    default="",
-)
-parser.add_argument(
     "--cmake-args", help="add custom cmake arguments for the compilation", default=""
 )
-parser.add_argument("--backend", help="select the backend to use", default="")
 args = parser.parse_args()
 
 # Selected configuration
@@ -139,25 +144,6 @@ if args.benchmarks:
 
     for b in args.benchmarks.split(","):
         selected_config["benchmarks"].append(b)
-
-# Select threads
-if args.threads:
-
-    # if args.threads is a list of threads
-
-    if "," in args.threads:
-
-        selected_config["threads"] = []
-        for thread in args.threads.split(","):
-            selected_config["threads"].append(int(thread))
-
-    # if args.threads is a single number
-
-    elif args.threads.isdigit():
-
-        selected_config["threads"] = []
-        for i in range(len(selected_config["benchmarks"])):
-            selected_config["threads"].append(int(args.threads))
 
 # Environment
 if args.env:
@@ -190,49 +176,17 @@ else:
     for i in range(len(selected_config["benchmarks"])):
         selected_config["args"].append("")
 
-# Select device
-if args.device:
-
-    cmake_args = selected_config["cmake"]
-
-    # remove the device option if exists
-    cmake_args = [arg for arg in cmake_args if not arg.startswith("-DDEVICE=")]
-    cmake_args.append("-DDEVICE={}".format(args.device))
-    # add the new device option
-    selected_config["cmake"] = cmake_args
-
-# Change backend
-if args.backend:
-    cmake_args = selected_config["cmake"]
-
-    # remove the backend option if exists
-    cmake_args = [arg for arg in cmake_args if not arg.startswith("-DBACKEND=")]
-    cmake_args.append("-DBACKEND={}".format(args.backend))
-    # add the new device option
-    selected_config["cmake"] = cmake_args
-
 # Add custom cmake arguments
 if args.cmake_args:
 
-    selected_config["cmake"].extend(args.cmake_args.split())
+    selected_config["cmake"] = args.cmake_args.split()
 
 # threshold
 threshold = args.threshold
 
+fresh = args.fresh
+
 assert threshold > 0, "Threshold should be positive"
-
-# Check if the configuration is valid:
-# - Size of the threads list should be equal or above to the number of benchmarks
-assert len(selected_config["threads"]) >= len(
-    selected_config["benchmarks"]
-), "No enough threads specified ({}) for the number of benchmarks ({})".format(
-    selected_config["threads"], selected_config["benchmarks"]
-)
-# - Threads should be positive
-assert all(
-    t > 0 for t in selected_config["threads"]
-), "Number of threads should be positive ({})".format(selected_config["threads"])
-
 
 # Get local path
 working_dir = os.path.dirname(__file__)
@@ -295,9 +249,11 @@ print(" VALIDATION \n")
 print(" Git branch: {}".format(git_branch))
 print(" Git hash: {}".format(git_hash))
 print(" Pipeline id: {}".format(pipeline_id))
-print(" Working dir: {}".format(working_dir))
+print(" Root dir: {}".format(root_dir))
+print(" Build dir: {}".format(build_dir))
 print(" Selected configuration: {}".format(configuration))
 print(" Compiler: {}".format(selected_config["compiler"]))
+print(" Fresh: {}".format(fresh))
 print(" Clean: {}".format(clean))
 print(" Save: {}".format(save_timers))
 print(" Unique id: {}".format(unique_id))
@@ -308,20 +264,13 @@ else:
 print(" Threshold: {}".format(threshold))
 print(" Prefix: {}".format(selected_config["prefix"]))
 print(" Env: {}".format(selected_config["env"]))
-print(" Device: {}".format(args.device))
-if args.backend != "" and args.backend != None:
-    print(" Backend: {}".format(args.backend))
 print(" Cmake args: {}".format(selected_config["cmake"]))
 
 # print all benchamrks
 
 print(" Benchmarks: ")
 for ib, benchmark in enumerate(selected_config["benchmarks"]):
-    print(
-        "   - {} : {} threads - args: {}".format(
-            benchmark, selected_config["threads"][ib], selected_config["args"][ib]
-        )
-    )
+    print("   - {} with args '{}'".format(benchmark, selected_config["args"][ib]))
 
 # ________________________________________________________________________________
 # Run benchmarks
@@ -339,7 +288,6 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
 
     # bench parameters
 
-    nb_threads = selected_config["threads"][ib]
     bench_dir = os.path.join(build_dir, benchmark)
 
     print("")
@@ -350,8 +298,8 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
     # Compilation
 
     # Create a directory for this benchmark
-    # if os.path.exists(bench_dir):
-    #     shutil.rmtree(bench_dir, ignore_errors=True)
+    if fresh:
+        shutil.rmtree(bench_dir, ignore_errors=True)
     os.makedirs(bench_dir, exist_ok=True)
 
     # # Go to the bench directory
@@ -409,9 +357,6 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
     if not compile_only:
 
         current_env = {}
-        if nb_threads:
-            # if benchmark has key threads
-            current_env.update({"OMP_NUM_THREADS": str(nb_threads)})
         current_env.update(env)
 
         print("")
@@ -428,7 +373,9 @@ for ib, benchmark in enumerate(selected_config["benchmarks"]):
         env_str = " ".join("{}={}".format(k, v) for k, v in current_env.items())
         print(env_str, " ".join(run_command))
 
-        subprocess.run(run_command, check=False, cwd=bench_dir, env={**(os.environ), **current_env})
+        subprocess.run(
+            run_command, check=False, cwd=bench_dir, env={**(os.environ), **current_env}
+        )
 
         # ____________________________________________________________________________
         # Check results

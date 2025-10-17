@@ -12,16 +12,14 @@
 #SBATCH --gres=gpu:1
 
 set -x
-cd ${SLURM_SUBMIT_DIR}
+cd "${SLURM_SUBMIT_DIR}"
 
-export PYTHONPATH=${PWD}:$PYTHONPATH
+module purge
+module load "gcc/13.2.0/gcc-4.8.5"
+module load "cuda/12.8.0/gcc-13.2.0"
+module load "cmake/3.21.4/gcc-13.2.0"
 
 # ________________________
 # Kokkos
 
-source $WORKDIR/gitlab-ci_runs/env/kokkos_v100
-
-python run.py -g kokkos_gpu
-#python run.py -g kokkos_unified_gpu
-#python run.py -g kokkos_dualview_unified_gpu
-
+python run.py -g gpu --cmake-args="-DCMAKE_BUILD_TYPE=Release -DKokkos_ENABLE_CUDA=ON -DKokkos_ARCH_VOLTA70=ON"

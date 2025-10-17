@@ -9,12 +9,13 @@
 #SBATCH --partition=cpu_short
 
 set -x
-cd ${SLURM_SUBMIT_DIR}
+cd "${SLURM_SUBMIT_DIR}"
+
+module purge
+module load "gcc/13.2.0/gcc-4.8.5"
+module load "cmake/3.21.4/gcc-13.2.0"
 
 # _________________________________________
-# Kokkos icpx
+# Kokkos
 
-source ${WORKDIR}/gitlab-ci_runs/env/kokkos_omp_cpu_intel
-python run.py -g kokkos -c icpx
-#python run.py -g kokkos_unified -c icpx
-
+python run.py -g cpu

@@ -11,20 +11,13 @@
 #SBATCH --output=output        # Name of the output file
 #SBATCH --error=error         # Name of the error file
 
-# Minipic environment
-source ~/env/minipic.sh
-
 # echo des commandes lancees
 set -x
 
 # Directory where the script was launched
-cd $SLURM_SUBMIT_DIR
+cd "$SLURM_SUBMIT_DIR"
 
 # ________________________
 # Kokkos
 
-python run.py -g kokkos_gpu
-python run.py -g kokkos_unified_gpu
-python run.py -g kokkos_dualview_unified_gpu
-
-
+python run.py -g gpu --cmake-args="-DCMAKE_BUILD_TYPE=Release -DKokkos_ENABLE_CUDA=ON -DKokkos_ARCH_VOLTA70=ON"
