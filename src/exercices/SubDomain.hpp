@@ -31,7 +31,7 @@ public:
   double inf_m[3];
   double sup_m[3];
 
-  // ______________________________________________________
+ // ______________________________________________________
   //
   //! \brief Alloc memory to store
   //! \param[in] params global parameters
@@ -349,8 +349,18 @@ public:
                 << "\n"
                 << std::endl;
 
-        operators::interpolate(em_, particles_m);
-        operators::push_momentum(particles_m, -0.5 * params.dt);
+      em_.sync(minipic::device, minipic::host);
+      for (size_t is = 0; is < particles_m.size(); ++is) {
+        particles_m[is].sync(minipic::device, minipic::host);
+      }
+
+      operators::interpolate(em_, particles_m);
+      operators::push_momentum(particles_m, -0.5 * params.dt);
+
+      em_.sync(minipic::host, minipic::device);
+      for (size_t is = 0; is < particles_m.size(); ++is) {
+        particles_m[is].sync(minipic::host, minipic::device);
+      }
     }
 
     // For each species, print :
@@ -486,6 +496,11 @@ public:
       DEBUG("  -> stop reset current");
     }
 
+    em_.sync(minipic::device, minipic::host);
+    for (size_t is = 0; is < particles_m.size(); ++is) {
+      particles_m[is].sync(minipic::device, minipic::host);
+    }
+
     // Interpolate from global field to particles
     DEBUG("  -> start interpolate ");
 
@@ -507,8 +522,26 @@ public:
 
     DEBUG("  -> stop pushBC");
 
+    em_.sync(minipic::host, minipic::device);
+    for (size_t is = 0; is < particles_m.size(); ++is) {
+      particles_m[is].sync(minipic::host, minipic::device);
+    }
+
+#if defined(__MINIPIC_DEBUG__)
+    // check particles
+    for (size_t is = 0; is < particles_m.size(); ++is) {
+      particles_m[is].check(inf_m[0], sup_m[0],
+                            inf_m[1], sup_m[1],
+                            inf_m[2], sup_m[2]);
+    }
+#endif
+
     // Projection in local field
     if (params.current_projection) {
+
+      for (size_t is = 0; is < particles_m.size(); ++is) {
+        particles_m[is].sync(minipic::device, minipic::host);
+      }
 
       // Projection directly in the global grid
       DEBUG("  ->  start projection");
@@ -516,12 +549,21 @@ public:
       operators::project(params, em_, particles_m);
 
       DEBUG("  ->  stop projection");
+
+      for (size_t is = 0; is < particles_m.size(); ++is) {
+        particles_m[is].sync(minipic::host, minipic::device);
+      }
     }
 
     // __________________________________________________________________
     // Sum all species contribution in the local and global current grids
 
     if (params.current_projection || params.n_particles > 0) {
+
+      em_.sync(minipic::host, minipic::device);
+      for (size_t is = 0; is < particles_m.size(); ++is) {
+        particles_m[is].sync(minipic::host, minipic::device);
+      }
 
       // Perform the boundary conditions for current
       DEBUG("  -> start current BC")
@@ -537,6 +579,8 @@ public:
 
     if (params.maxwell_solver) {
 
+      em_.sync(minipic::device, minipic::host);
+
       // Generate a laser field with an antenna
       for (size_t iantenna = 0; iantenna < params.antenna_profiles_.size(); iantenna++) {
         operators::antenna(params,
@@ -544,7 +588,9 @@ public:
                            params.antenna_profiles_[iantenna],
                            params.antenna_positions_[iantenna],
                            it * params.dt);
+
       }
+
 
       // Solve the Maxwell equation
       DEBUG("  -> start solve Maxwell")
@@ -552,6 +598,8 @@ public:
       operators::solve_maxwell(params, em_);
 
       DEBUG("  -> stop solve Maxwell")
+
+      em_.sync(minipic::host, minipic::device);
 
       // Boundary conditions on EM fields
       DEBUG("  -> start solve BC")
@@ -687,5 +735,6 @@ public:
 
     return total_number_of_particles;
   }
+
 
 }; // end class

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "Params.hpp"
+#include "Particles.hpp"
 
 namespace Diags {
 

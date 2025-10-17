@@ -71,9 +71,10 @@ auto interpolate(ElectroMagn &em, std::vector<Particles<mini_float>> &particles)
 
         // Compute interpolation coeff, p = primal, d = dual
 
-        double coeffs[3] = {ixn + 0.5, iyn, izn};
-
+        // Ex (d, p, p)
         {
+          const double coeffs[3] = {ixn + 0.5, iyn, izn};
+
           const double v00 =
             Ex(ixd, iyp, izp) * (1 - coeffs[0]) + Ex(ixd + 1, iyp, izp) * coeffs[0];
           const double v01 =
@@ -105,6 +106,7 @@ auto interpolate(ElectroMagn &em, std::vector<Particles<mini_float>> &particles)
 
           Eyp(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
         }
+
         // Ez (p, p, d)
         {
           const double coeffs[3] = {ixn, iyn, izn + 0.5};
@@ -203,6 +205,7 @@ auto push(std::vector<Particles<mini_float>> &particles, double dt) -> void {
     // q' = dt * (q/2m)
     const mini_float qp = particles[is].charge_m * dt * 0.5 / particles[is].mass_m;
 
+    particles[is].sync(minipic::device, minipic::host);
     device_vector_t x = particles[is].x_.data_;
     device_vector_t y = particles[is].y_.data_;
     device_vector_t z = particles[is].z_.data_;
@@ -391,14 +394,14 @@ auto pushBC(Params &params, std::vector<Particles<mini_float>> &particles) -> vo
             mini_float *pos[3] = {&x(part), &y(part), &z(part)};
 
             for (int d = 0; d < 3; d++) {
-                if (*pos[d] >= sup_global[d]) {
+              if (*pos[d] >= sup_global[d]) {
 
-                  *pos[d] -= length[d];
+                *pos[d] -= length[d];
 
-                } else if (*pos[d] < inf_global[d]) {
+              } else if (*pos[d] < inf_global[d]) {
 
-                  *pos[d] += length[d];
-                }
+                *pos[d] += length[d];
+              }
             }
           } // End loop on particles
 
@@ -512,13 +515,11 @@ void project(Params &params, ElectroMagn &em, std::vector<Particles<mini_float>>
     Kokkos::parallel_for(
       n_particles,
       KOKKOS_LAMBDA(const int part) {
-
 #if defined(__MINIPIC_KOKKOS_SCATTERVIEW__)
         auto Jx = scatter_Jx.access();
         auto Jy = scatter_Jy.access();
         auto Jz = scatter_Jz.access();
 #endif
-
         // Delete if already compute by Pusher
         // double usq = (moment[0]*moment[0] + moment[1]*moment[1] + moment[2]*moment[2]);
         // double gamma = sqrt(1+usq);
@@ -527,7 +528,7 @@ void project(Params &params, ElectroMagn &em, std::vector<Particles<mini_float>>
         const double charge_weight = inv_cell_volume_x_q * w(part);
 
         const double gamma_inv =
-          1 / Kokkos::sqrt(1 + (mx(part) * mx(part) + my(part) * my(part) + mz(part) * mz(part)));
+          1 / sqrt(1 + (mx(part) * mx(part) + my(part) * my(part) + mz(part) * mz(part)));
 
         const double vx = mx(part) * gamma_inv;
         const double vy = my(part) * gamma_inv;
@@ -546,14 +547,14 @@ void project(Params &params, ElectroMagn &em, std::vector<Particles<mini_float>>
         const double poszn = (z(part) - 0.5 * dt * vz) * inv_dz + 1;
 
         // Compute indexes in primal grid
-        const int ixp = (int)(Kokkos::floor(posxn)); //- i_patch_topology_m * nx_cells_m;
-        const int iyp = (int)(Kokkos::floor(posyn)); //- j_patch_topology_m * ny_cells_m;
-        const int izp = (int)(Kokkos::floor(poszn)); //- k_patch_topology_m * nz_cells_m;
+        const int ixp = (int)(floor(posxn)); //- i_patch_topology_m * nx_cells_m;
+        const int iyp = (int)(floor(posyn)); //- j_patch_topology_m * ny_cells_m;
+        const int izp = (int)(floor(poszn)); //- k_patch_topology_m * nz_cells_m;
 
         // Compute indexes in dual grid
-        const int ixd = (int)Kokkos::floor(posxn - 0.5); //- i_patch_topology_m * nx_cells_m;
-        const int iyd = (int)Kokkos::floor(posyn - 0.5); //- j_patch_topology_m * ny_cells_m;
-        const int izd = (int)Kokkos::floor(poszn - 0.5); //- k_patch_topology_m * nz_cells_m;
+        const int ixd = (int)floor(posxn - 0.5); //- i_patch_topology_m * nx_cells_m;
+        const int iyd = (int)floor(posyn - 0.5); //- j_patch_topology_m * ny_cells_m;
+        const int izd = (int)floor(poszn - 0.5); //- k_patch_topology_m * nz_cells_m;
 
         // Projection particle on currant field
         // Compute interpolation coeff, p = primal, d = dual
@@ -564,7 +565,6 @@ void project(Params &params, ElectroMagn &em, std::vector<Particles<mini_float>>
         coeffs[1] = posyn - iyp;
         coeffs[2] = poszn - izp;
 
-        // #if defined(__MINIPIC_KOKKOS_SCATTERVIEW__)
         Jx(ixd, iyp, izp) += (1 - coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jxp;
         Jx(ixd, iyp, izp + 1) += (1 - coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jxp;
         Jx(ixd, iyp + 1, izp) += (1 - coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jxp;
@@ -578,7 +578,6 @@ void project(Params &params, ElectroMagn &em, std::vector<Particles<mini_float>>
         coeffs[1] = posyn - 0.5 - iyd;
         coeffs[2] = poszn - izp;
 
-        // #if defined(__MINIPIC_KOKKOS_SCATTERVIEW__)
         Jy(ixp, iyd, izp) += (1 - coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jyp;
         Jy(ixp, iyd, izp + 1) += (1 - coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jyp;
         Jy(ixp, iyd + 1, izp) += (1 - coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jyp;
@@ -592,7 +591,6 @@ void project(Params &params, ElectroMagn &em, std::vector<Particles<mini_float>>
         coeffs[1] = posyn - iyp;
         coeffs[2] = poszn - 0.5 - izd;
 
-        // #if defined(__MINIPIC_KOKKOS_SCATTERVIEW__)
         Jz(ixp, iyp, izd) += (1 - coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jzp;
         Jz(ixp, iyp, izd + 1) += (1 - coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jzp;
         Jz(ixp, iyp + 1, izd) += (1 - coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jzp;
@@ -602,8 +600,8 @@ void project(Params &params, ElectroMagn &em, std::vector<Particles<mini_float>>
         Jz(ixp + 1, iyp + 1, izd) += (coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jzp;
         Jz(ixp + 1, iyp + 1, izd + 1) += (coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jzp;
 
-      } // end for each particles
-    );
+      }
+    );  // end for each particles
 
     Kokkos::fence();
 #if defined(__MINIPIC_KOKKOS_SCATTERVIEW__)
@@ -611,8 +609,7 @@ void project(Params &params, ElectroMagn &em, std::vector<Particles<mini_float>>
     Kokkos::Experimental::contribute(Jy_device, scatter_Jy);
     Kokkos::Experimental::contribute(Jz_device, scatter_Jz);
 #endif
-
-  }
+  } // end for each species
 }
 
 // _______________________________________________________
@@ -815,7 +812,7 @@ void currentBC(Params &params, ElectroMagn &em) {
       });
 
     Kokkos::parallel_for(
-      mdrange_policy({0, 0}, {nx_Jx, nx_Jx}),
+      mdrange_policy({0, 0}, {nx_Jy, ny_Jy}),
       KOKKOS_LAMBDA(const int ix, const int iy) {
         Jy(ix, iy, 0) += Jy(ix, iy, nz_Jy - 2);
         Jy(ix, iy, nz_Jy - 2) = Jy(ix, iy, 0);
@@ -1022,7 +1019,6 @@ auto solveBC(Params &params, ElectroMagn &em) -> void {
     Kokkos::fence();
   } // End if
 } // End solveBC
-
 
 // ____________________________________________________________________________
 //! \brief Emit a laser field in the x direction using an antenna
