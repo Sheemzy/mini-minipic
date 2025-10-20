@@ -20,6 +20,10 @@ def validate_setup(path, setup, threshold):
 
     print(f"\033[32mBenchmark `{setup}` tested with success \033[39m")
 
+    # force flush to see text on time
+    # especially useful on HPC
+    sys.stdout.flush()
+
 
 def validate():
     parser = ArgumentParser(description="Run a validation script")
