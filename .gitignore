@@ -19,3 +19,9 @@ latex*
 *.opt.yaml
 external/
 *.egg-info
+
+CACHEDIR.TAG
+bin/
+lib/
+man/
+pyvenv.cfg

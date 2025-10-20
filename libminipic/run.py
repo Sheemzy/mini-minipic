@@ -184,6 +184,12 @@ def run():
         help="add custom prefix for the execution, for instance srun",
     )
     parser.add_argument(
+            "-p",
+            "--path",
+            help="path where the CMakeLists.txt is, default to corrent working directory",
+            default=os.getcwd()
+            )
+    parser.add_argument(
         "--env",
         help="add custom environment variables for the execution, for instance `OMP_PROC_BIND=spread`",
     )
@@ -272,8 +278,7 @@ def run():
     assert threshold > 0, "Threshold should be positive"
 
     # Get local path
-    working_dir = os.path.dirname(__file__)
-    root_dir = os.path.dirname(working_dir)
+    root_dir = args.path
     build_dir = os.path.join(root_dir, args.build_dir)
 
     # Add validation path to the PYTHONPATH
