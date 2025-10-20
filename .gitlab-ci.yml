@@ -22,8 +22,8 @@ test_exercise_serial:
   # needs: [ test_omp ]
   before_script:
     - source ${WORKDIR}/gitlab-ci_runs/env/kokkos_omp_cpu_intel
-    - module load "python/3.9.10/gcc-11.2.0"
-    - pip install --user .
+    - module load "python-nospack/3.12.4/gcc-11.2.0"
+    - pip3.12 install --user .
   script:
     - srun --time=00:20:00 --cpus-per-task=4 --ntasks=1 --partition=cpu_short mini-run -c icpx -g cpu-serial --cmake-args-add="-DMINIPIC_IMPLEMENTATION=exercise" --build="build/exercise"
 
@@ -40,8 +40,8 @@ test_kokkos_omp:
   # needs: [ test_omp ]
   before_script:
     - source ${WORKDIR}/gitlab-ci_runs/env/kokkos_omp_cpu_intel
-    - module load "python/3.9.10/gcc-11.2.0"
-    - pip install --user .
+    - module load "python-nospack/3.12.4/gcc-11.2.0"
+    - pip3.12 install --user .
   script:
     - srun --time=00:20:00 --cpus-per-task=8 --ntasks=1 --partition=cpu_short mini-run -c icpx -g cpu-openmp --cmake-args-add="-DMINIPIC_IMPLEMENTATION=kokkos" --build="build/kokkos/omp"
 
@@ -58,7 +58,7 @@ test_kokkos_gpu:
   # needs: [ test_kokkos_omp ]
   before_script:
     - source $WORKDIR/gitlab-ci_runs/env/kokkos_a100
-    - module load "python/3.9.10/gcc-11.2.0"
-    - pip install --user .
+    - module load "python-nospack/3.12.4/gcc-11.2.0"
+    - pip3.12 install --user .
   script:
     - srun --nodes=1 --time=00:15:00 -p gpua100 --gres=gpu:1 --exclude=$EXCLUDED_GPUS mini-run -c g++ -g gpu-a100 --cmake-args-add="-DMINIPIC_IMPLEMENTATION=kokkos" --build="build/kokkos/gpu"
