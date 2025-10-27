@@ -34,12 +34,9 @@ message(" Build type: ${CMAKE_BUILD_TYPE}")
 # Debug and test modes
 option(MINIPIC_DEBUG "Debug messages" OFF)
 option(MINIPIC_WARNING "Warning mode" OFF)
-option(MINIPIC_BUILD "Compile minipic" ON)
 option(MINIPIC_UNIFIED_MEMORY "Use unified memory" OFF)
 set(MINIPIC_IMPLEMENTATION "exercise" CACHE STRING "Which implementation to use (must be an existing directory in src/)")
 set(MINIPIC_SETUP "antenna" CACHE STRING "Which setup to build and run with (must be the stem name of a valid .cpp file in src/setups/)")
-
-message(" Minipic compilation: ${MINIPIC_BUILD}")
 
 # _________________________________________________________________
 # Debug mode
@@ -106,30 +103,28 @@ endif()
 # __________________________________________________________________
 # Create executable with options
 
-if(MINIPIC_BUILD)
-  add_executable(
-    minipic
-    "src/common/Params.cpp"
-    "src/common/Tools.cpp"
-    "${SETUP_FILE}"
-    "src/main.cpp"
-  )
-  target_include_directories(
-    minipic
-    PUBLIC
-      "src/setups"
-      "src/common"
-      "${IMPLEMENTATION_DIRECTORY}"
-  )
-  target_compile_definitions(
-    minipic
-    PUBLIC
-      $<$<BOOL:${MINIPIC_DEBUG}>:__MINIPIC_DEBUG__>
-      $<$<BOOL:${MINIPIC_UNIFIED_MEMORY}>:__MINIPIC_KOKKOS_UNIFIED__>
-  )
-  target_link_libraries(
-    minipic
-    PRIVATE
-      Kokkos::kokkos
-  )
-endif()
+add_executable(
+  minipic
+  "src/common/Params.cpp"
+  "src/common/Tools.cpp"
+  "${SETUP_FILE}"
+  "src/main.cpp"
+)
+target_include_directories(
+  minipic
+  PUBLIC
+    "src/setups"
+    "src/common"
+    "${IMPLEMENTATION_DIRECTORY}"
+)
+target_compile_definitions(
+  minipic
+  PUBLIC
+    $<$<BOOL:${MINIPIC_DEBUG}>:__MINIPIC_DEBUG__>
+    $<$<BOOL:${MINIPIC_UNIFIED_MEMORY}>:__MINIPIC_KOKKOS_UNIFIED__>
+)
+target_link_libraries(
+  minipic
+  PRIVATE
+    Kokkos::kokkos
+)
