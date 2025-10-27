@@ -21,11 +21,11 @@ git submodule update --init
 
 ### Method 2: Using an installed Kokkos
 
-If you have Kokkos already installed, you need to tell CMake where to find it.
-Either way:
+```bash
+git clone <url of the repo>
+```
 
-- `-DKokkos_ROOT=/path/to/kokkos/install`: specify Kokkos installation directory
-- `-DCMAKE_PREFIX_PATH=/path/to/kokkos/install`: add to CMake search paths
+If you have Kokkos already installed, you will need to tell CMake where to find it with `-DKokkos_ROOT=/path/to/kokkos/install`.
 
 ## Build
 
@@ -40,14 +40,16 @@ cmake --build build
 
 <img title="Warning" alt="Warning" src="./images/warning.png" height="20"> By default, the code is compiled with Kokkos serial backend (sequential mode).
 
+Note that you have to add `-DKokkos_ROOT=<...>` if you use an already installed version of Kokkos.
+
 ### Options
 
-CMake useful options:
+CMake generic options:
 
 - `-DCMAKE_CXX_COMPILER=<compiler choice>`: specify the compiler to use;
 - `-DCMAKE_BUILD_TYPE=<build type>`: specify the build (most commons are `Debug` and `Release`).
 
-Others:
+Project specific options:
 
 - `-DMINIPIC_DEBUG=<ON/OFF>`: enable/disable debug messages (`OFF` by default);
 - `-DMINIPIC_WARNING=<ON/OFF>`: enable/disable compiler warnings (`OFF` by default);

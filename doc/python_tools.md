@@ -1,7 +1,7 @@
-# Python tools (libminipic)
+# Python tools (`libminipic`)
 
 MiniPIC uses several tools gathered in the `libminipic` library.
-These tools are used for testing, validation, and plotting.
+These tools are used for full execution, validation, printing, verification, and plotting.
 
 Two commands and several scripts are available.
 
@@ -13,7 +13,8 @@ On a supercomputer, you may have to load a specific version of Python:
 module load python<x.y>
 ```
 
-The `libminipic` requires python ≥ 3.11.
+with `<x.y>` the version of Python.
+The `libminipic` requires Python ≥ 3.11.
 
 You can list the available versions with:
 
@@ -23,7 +24,7 @@ module avail python
 
 ## Installation
 
-Install the python tools with:
+Install the Python tools with:
 
 ```sh
 pip install --user .
@@ -44,13 +45,13 @@ pip install .
 
 with `<x.y>` the version of Python.
 By instance, `python3.12`.
-Note you have to source the activation script if you are in a new terminal.
+Note you have to source the activation script if you are in a new terminal (and in a Slurm job).
 
 </details>
 
 ## `mini-run` command
 
-The command `mini-run` is used to build miniPIC for a selection of setups, to execute it and to validate its results.
+The `mini-run` command is used to build miniPIC for a selection of setups, to execute it and to validate its results.
 For validation, `mini-run` calls the same functions as `mini-validate` internally.
 
 You can get some help with:
@@ -72,14 +73,14 @@ Here is a list of the available options:
 | | `--build-dir` | Build directory to use, default to `build` |
 | | `--implementation` | Which implementation to use, default to `exercise` |
 | `-a ARGUMENTS` | `--arguments ARGUMENTS` | Default arguments |
-| | `--fresh` | Whether to delete or already existing files |
-| | `--clean` | Whether to delete or not the generated files |
+| | `--fresh` | Whether to delete or not already existing files (clean before build) |
+| | `--clean` | Whether to delete or not the generated files (clean after run) |
 | | `--no-evaluate` | If used, do not evaluate against the reference |
 | | `--compile-only` | If used, only compile the tests |
 | | `--threshold THRESHOLD` | Threshold for the validation |
 | | `--save-timers` | Save the timers for each benchmark |
 | | `--env` | Custom environment variables for the execution |
-| | `--cmake-args` | Custom CMake arguments |
+| | `--cmake-args` | Set CMake arguments |
 | | `--cmake-args-add` | Append custom CMake arguments |
 
 ### Configurations
@@ -101,24 +102,24 @@ Here is a list of all configurations:
 #### Default run
 
 ```bash
-python tests/run.py
+mini-run
 ```
 
 #### Specific configuration
 
 ```bash
-python tests/run.py -g gpu
+mini-run -g gpu
 ```
 
 #### Custom compiler
 
 ```bash
-python tests/run.py -c clang++
+mini-run -c clang++
 ```
 
 ## `mini-validate` command
 
-A validation mechanism can be used to validate the code outputs after it ran.
+A validation mechanism can be used to validate simulation results.
 Output files are checked against reference values.
 
 You can access the help page by doing:
@@ -143,13 +144,12 @@ The possible setups are:
 
 - `antenna`
 - `b_cst`
-- `e_cst`
 - `beam`
+- `e_cst`
 - `thermal`
 
-For a given benchmark, the output results can be analyzed to validate the run.
-This only happens if a script of the same name is present in the directory `validate` on the root of the repository.
-For instance, `default.py` being implemented in `validate`, the run of `default.hpp` will be analyzed at the end of the simulation.
+Validation take place if, for a given setup, a Python file of the same name is present in the directory `libminipic/validation`.
+For instance, the `thermal` setup (which corresponds to the `src/setups/thermal.cpp`) is checked using the `libminipic/validation/thermal.py` file.
 
 ## Scripts directory
 
