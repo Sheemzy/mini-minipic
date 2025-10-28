@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 
-from libminipic.ci import print_step
+from libminipic.ci import print_command, print_step
 from libminipic.validate import validate_setup
 
 # ________________________________________________________________________________
@@ -394,12 +394,12 @@ def run():
 
         print_step("Compilation")
 
-        print(" ".join(cmake_command))
+        print_command(cmake_command)
 
         subprocess.run(cmake_command, cwd=bench_dir, check=True)
 
         make_command = ["cmake", "--build", bench_dir, "--parallel", "4"]
-        print(" ".join(make_command))
+        print_command(make_command)
 
         subprocess.run(make_command, check=True)
 
@@ -424,8 +424,7 @@ def run():
             if prefix:
                 run_command = [*(prefix.split()), *run_command]
 
-            env_str = " ".join("{}={}".format(k, v) for k, v in current_env.items())
-            print(env_str, " ".join(run_command))
+            print_command(run_command, env=current_env)
 
             subprocess.run(
                 run_command,

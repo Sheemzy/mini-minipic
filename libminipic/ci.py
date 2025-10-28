@@ -40,6 +40,16 @@ def print_step(message, level=1):
     force_print()
 
 
+def print_command(command, env=None):
+    """Print a `subprocess.run` command list."""
+    env_list = []
+    if env is not None:
+        env_list = [f"{k}={v}" for k, v in env.items()]
+
+    cprint(" ".join((*env_list, *command)), "yellow")
+    force_print()
+
+
 def force_print():
     """Force flush to see text on time.
 
