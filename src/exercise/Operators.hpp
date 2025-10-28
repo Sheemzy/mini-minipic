@@ -365,81 +365,75 @@ auto push_momentum(std::vector<Particles> &particles, double dt) -> void {
 //! \param[in] std::vector<Particles> & particles - vector of species Particles
 // _____________________________________________________________________
 auto pushBC(Params &params, std::vector<Particles> &particles) -> void {
-
   const double inf_global[3] = {params.inf_x, params.inf_y, params.inf_z};
   const double sup_global[3] = {params.sup_x, params.sup_y, params.sup_z};
 
-  // Periodic conditions
   if (params.boundary_condition_code == 1) {
-
+    // Periodic conditions
     const double length[3] = {params.Lx, params.Ly, params.Lz};
 
     for (size_t is = 0; is < particles.size(); is++) {
-
       unsigned int n_particles = particles[is].size();
 
-      Particles::hostview_t x = particles[is].x_h_m;
-      Particles::hostview_t y = particles[is].y_h_m;
-      Particles::hostview_t z = particles[is].z_h_m;
+      Particles::view_t x = particles[is].x_m;
+      Particles::view_t y = particles[is].y_m;
+      Particles::view_t z = particles[is].z_m;
 
-      for (unsigned int part = 0; part < n_particles; ++part) {
-          double *pos[3] = {&x(part), &y(part), &z(part)};
+      Kokkos::parallel_for(
+          n_particles,
+          KOKKOS_LAMBDA(const int part) {
+            double *pos[3] = {&x(part), &y(part), &z(part)};
 
-          for (unsigned int d = 0; d < 3; d++) {
-            if (*pos[d] >= sup_global[d]) {
-
-              *pos[d] -= length[d];
-
-            } else if (*pos[d] < inf_global[d]) {
-
-              *pos[d] += length[d];
-
+            for (unsigned int d = 0; d < 3; d++) {
+              if (*pos[d] >= sup_global[d]) {
+                *pos[d] -= length[d];
+              } else if (*pos[d] < inf_global[d]) {
+                *pos[d] += length[d];
+              }
             }
-          }
-          
-        } // End loop on particles
+          } // End loop on particles
+
+          );
+
+      Kokkos::fence();
 
     } // End loop on species
 
-    // Reflective conditions
   } else if (params.boundary_condition_code == 2) {
+    // Reflective conditions
     for (size_t is = 0; is < particles.size(); is++) {
-
       unsigned int n_particles = particles[is].size();
 
-      Particles::hostview_t x = particles[is].x_h_m;
-      Particles::hostview_t y = particles[is].y_h_m;
-      Particles::hostview_t z = particles[is].z_h_m;
+      Particles::view_t x = particles[is].x_m;
+      Particles::view_t y = particles[is].y_m;
+      Particles::view_t z = particles[is].z_m;
 
-      Particles::hostview_t mx = particles[is].mx_h_m;
-      Particles::hostview_t my = particles[is].my_h_m;
-      Particles::hostview_t mz = particles[is].mz_h_m;
+      Particles::view_t mx = particles[is].mx_m;
+      Particles::view_t my = particles[is].my_m;
+      Particles::view_t mz = particles[is].mz_m;
 
-      for(unsigned int part = 0; part < n_particles; ++part) {
-          double *pos[3] = {&x(part), &y(part), &z(part)};
+      Kokkos::parallel_for(
+          n_particles,
+          KOKKOS_LAMBDA(const int part) {
+            double *pos[3] = {&x(part), &y(part), &z(part)};
+            double *momentum[3] = {&mx(part), &my(part), &mz(part)};
 
-          double *momentum[3] = {&mx(part), &my(part), &mz(part)};
-
-          for (unsigned int d = 0; d < 3; d++) {
-
-            if (*pos[d] >= sup_global[d]) {
-
-              *pos[d]      = 2 * sup_global[d] - *pos[d];
-              *momentum[d] = -*momentum[d];
-
-            } else if (*pos[d] < inf_global[d]) {
-
-              *pos[d]      = 2 * inf_global[d] - *pos[d];
-              *momentum[d] = -*momentum[d];
-
+            for (unsigned int d = 0; d < 3; d++) {
+              if (*pos[d] >= sup_global[d]) {
+                *pos[d]      = 2 * sup_global[d] - *pos[d];
+                *momentum[d] = -*momentum[d];
+              } else if (*pos[d] < inf_global[d]) {
+                *pos[d]      = 2 * inf_global[d] - *pos[d];
+                *momentum[d] = -*momentum[d];
+              }
             }
-          }
+          } // End loop on particles
+        );
 
-        } // End loop on particles
+      Kokkos::fence();
 
-      } // End loop on species
-
-    } // if type of conditions
+    } // End loop on species
+  } // if type of conditions
 }
 
 // _______________________________________________________________________

@@ -514,17 +514,17 @@ public:
 
     DEBUG("  -> stop push");
 
+    em_m.sync(minipic::host, minipic::device);
+    for (size_t is = 0; is < particles_m.size(); ++is) {
+      particles_m[is].sync(minipic::host, minipic::device);
+    }
+
     // Do boundary conditions on global domain
     DEBUG("  -> Patch 0: start pushBC");
 
     operators::pushBC(params, particles_m);
 
     DEBUG("  -> stop pushBC");
-
-    em_m.sync(minipic::host, minipic::device);
-    for (size_t is = 0; is < particles_m.size(); ++is) {
-      particles_m[is].sync(minipic::host, minipic::device);
-    }
 
 #if defined(__MINIPIC_DEBUG__)
     // check particles
