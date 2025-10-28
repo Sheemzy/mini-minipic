@@ -2,11 +2,23 @@
 
 import math
 
+from termcolor import cprint
+
 from libminipic.exceptions import (
     IncorrectValueMiniPICError,
     ThresholdValueMiniPICError,
     ValueMiniPICError,
 )
+
+
+def success(message):
+    """Print a success message."""
+    cprint(message, "green", attrs=["bold"])
+
+
+def failure(message):
+    """Print a failure message."""
+    cprint(message, "red", attrs=["bold"])
 
 
 def evaluate(value, reference, threshold, operator="relative", txt=""):

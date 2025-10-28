@@ -2,6 +2,7 @@
 
 import sys
 
+from libminipic.ci import failure
 from libminipic.exceptions import MiniPICError
 from libminipic.run import run
 from libminipic.validate import validate
@@ -15,11 +16,11 @@ def execute(function):
         return 0
 
     except MiniPICError as exception:
-        print(exception)
+        failure(exception)
         return 1
 
     except:
-        print("Unexpected error")
+        failure("Unexpected error")
         raise
 
 
