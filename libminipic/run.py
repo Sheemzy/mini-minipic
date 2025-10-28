@@ -437,6 +437,17 @@ def run():
             # Check results
 
             print_step("Validation")
+            print_command(
+                [
+                    "mini-validate",
+                    "--path",
+                    bench_dir,
+                    "--setup",
+                    setup,
+                    "--threshold",
+                    threshold,
+                ]
+            )
 
             validate_setup(bench_dir, setup, threshold)
 

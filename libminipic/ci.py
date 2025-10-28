@@ -46,7 +46,7 @@ def print_command(command, env=None):
     if env is not None:
         env_list = [f"{k}={v}" for k, v in env.items()]
 
-    cprint(" ".join((*env_list, *command)), "yellow")
+    cprint(" ".join(str(v) for v in (*env_list, *command)), "yellow")
     force_print()
 
 
