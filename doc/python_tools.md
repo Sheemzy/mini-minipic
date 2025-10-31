@@ -39,7 +39,7 @@ Even better, you can use a virtual environment.
 ```sh
 pip install --user virtualenv
 virtualenv --python python<x.y> $PWD/venv
-source venv/activate
+source venv/bin/activate
 pip install .
 ```
 
