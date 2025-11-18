@@ -62,17 +62,17 @@ void iterate(const Params &params, ElectroMagn &em, std::vector<Particles> &part
 
   DEBUG("  -> stop push");
 
+  em.sync(minipic::host, minipic::device);
+  for (size_t is = 0; is < particles.size(); ++is) {
+    particles[is].sync(minipic::host, minipic::device);
+  }
+
   // Do boundary conditions on global domain
   DEBUG("  -> Patch 0: start pushBC");
 
   operators::pushBC(params, particles);
 
   DEBUG("  -> stop pushBC");
-
-  em.sync(minipic::host, minipic::device);
-  for (size_t is = 0; is < particles.size(); ++is) {
-    particles[is].sync(minipic::host, minipic::device);
-  }
 
 #if defined(MINIPIC_DEBUG)
   // check particles

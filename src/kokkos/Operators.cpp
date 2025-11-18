@@ -423,11 +423,9 @@ void pushBC(const Params &params, std::vector<Particles> &particles) {
 
   // Periodic conditions
   if (params.boundary_condition_code == 1) {
-
     const double length[3] = {params.Lx, params.Ly, params.Lz};
 
     for (size_t is = 0; is < particles.size(); is++) {
-
       unsigned int n_particles = particles[is].size();
 
       Particles::view_t x = particles[is].x_m;
@@ -437,21 +435,17 @@ void pushBC(const Params &params, std::vector<Particles> &particles) {
       Kokkos::parallel_for(
           n_particles,
           KOKKOS_LAMBDA(const int part) {
-          double *pos[3] = {&x(part), &y(part), &z(part)};
-
-          for (unsigned int d = 0; d < 3; d++) {
-          if (*pos[d] >= sup_global[d]) {
-
-          *pos[d] -= length[d];
-
-          } else if (*pos[d] < inf_global[d]) {
-
-          *pos[d] += length[d];
-          }
-          }
+            double *pos[3] = {&x(part), &y(part), &z(part)};
+            for (unsigned int d = 0; d < 3; d++) {
+              if (*pos[d] >= sup_global[d]) {
+                *pos[d] -= length[d];
+              } else if (*pos[d] < inf_global[d]) {
+                *pos[d] += length[d];
+              }
+            }
           } // End loop on particles
-
-          );
+        );
+          
 
       Kokkos::fence();
 
@@ -460,7 +454,6 @@ void pushBC(const Params &params, std::vector<Particles> &particles) {
     // Reflective conditions
   } else if (params.boundary_condition_code == 2) {
     for (size_t is = 0; is < particles.size(); is++) {
-
       unsigned int n_particles = particles[is].size();
 
       Particles::view_t x = particles[is].x_m;
@@ -474,26 +467,20 @@ void pushBC(const Params &params, std::vector<Particles> &particles) {
       Kokkos::parallel_for(
           n_particles,
           KOKKOS_LAMBDA(const int part) {
-          double *pos[3] = {&x(part), &y(part), &z(part)};
+            double *pos[3] = {&x(part), &y(part), &z(part)};
+            double *momentum[3] = {&mx(part), &my(part), &mz(part)};
 
-          double *momentum[3] = {&mx(part), &my(part), &mz(part)};
-
-          for (int d = 0; d < 3; d++) {
-
-          if (*pos[d] >= sup_global[d]) {
-
-          *pos[d]      = 2 * sup_global[d] - *pos[d];
-          *momentum[d] = -*momentum[d];
-
-          } else if (*pos[d] < inf_global[d]) {
-
-          *pos[d]      = 2 * inf_global[d] - *pos[d];
-          *momentum[d] = -*momentum[d];
-          }
-          }
-          } // End loop on particles
-
-      );
+              for (int d = 0; d < 3; d++) {
+                if (*pos[d] >= sup_global[d]) {
+                  *pos[d]      = 2 * sup_global[d] - *pos[d];
+                  *momentum[d] = -*momentum[d];
+                } else if (*pos[d] < inf_global[d]) {
+                  *pos[d]      = 2 * inf_global[d] - *pos[d];
+                  *momentum[d] = -*momentum[d];
+                }
+              }
+            } // End loop on particles
+          );
 
       Kokkos::fence();
 
