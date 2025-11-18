@@ -1,4 +1,3 @@
-
 /* _____________________________________________________________________ */
 //! \file SubDomain.hpp
 
@@ -13,9 +12,9 @@
 #include "ElectroMagn.hpp"
 #include "Particles.hpp"
 #include "Diagnostics.hpp"
-#include "Operators.hpp"
 #include "Params.hpp"
 #include "Timers.hpp"
+#include "Managers.hpp"
 
 //! \brief Wrapper class to clean main
 class SubDomain {
@@ -31,7 +30,7 @@ public:
   double inf_m[3];
   double sup_m[3];
 
- // ______________________________________________________
+  // ______________________________________________________
   //
   //! \brief Alloc memory to store
   //! \param[in] params global parameters
@@ -82,7 +81,7 @@ public:
     }
 
     for (unsigned int is = 0; is < n_species; is++) {
-      unsigned int n_particles = params.n_particles_by_species[is] + params.particles_to_add_m.size();
+      int n_particles = params.n_particles_by_species[is] + params.particles_to_add_m.size();
 
       // Alloc memory to store particles
       particles_m[is].allocate(params.charge_m[is],
@@ -94,7 +93,7 @@ public:
 
     // Particle initialization
 
-    const unsigned int total_cells = params.nx_cells * params.ny_cells * params.nz_cells;
+    const int total_cells = params.nx_cells * params.ny_cells * params.nz_cells;
 
     const double cell_volume = params.cell_volume;
 
@@ -151,9 +150,9 @@ public:
           for (std::size_t j = 0; j < params.ny_cells; j++) {
             for (std::size_t k = 0; k < params.nz_cells; k++) {
 
-              const std::size_t i_global = i;
-              const std::size_t j_global = j;
-              const std::size_t k_global = k;
+              const int i_global = i;
+              const int j_global = j;
+              const int k_global = k;
 
               // Local cell index
               const int local_cell_index = i * (params.ny_cells * params.nz_cells) + j * params.nz_cells + k;
@@ -341,26 +340,8 @@ public:
 
     } // end for species
 
-    // Momentum correction (to respect the leap frog scheme)
-    if (params.momentum_correction) {
-
-      std::cout << " > Apply momentum correction "
-                << "\n"
-                << std::endl;
-
-      em_m.sync(minipic::device, minipic::host);
-      for (size_t is = 0; is < particles_m.size(); ++is) {
-        particles_m[is].sync(minipic::device, minipic::host);
-      }
-
-      operators::interpolate(em_m, particles_m);
-      operators::push_momentum(particles_m, -0.5 * params.dt);
-
-      em_m.sync(minipic::host, minipic::device);
-      for (size_t is = 0; is < particles_m.size(); ++is) {
-        particles_m[is].sync(minipic::host, minipic::device);
-      }
-    }
+    // initializations steps that require to use operators
+    managers::initialize(params, em_m, particles_m);
 
     // For each species, print :
     // - total number of particles
@@ -485,127 +466,7 @@ public:
   //! \param[in] int it iteration number
   // ______________________________________________________________________________
   void iterate(Params &params, int it) {
-
-    if (params.current_projection || params.n_particles > 0) {
-
-      DEBUG("  -> start reset current");
-
-      em_m.reset_currents(minipic::device);
-
-      DEBUG("  -> stop reset current");
-    }
-
-    em_m.sync(minipic::device, minipic::host);
-    for (size_t is = 0; is < particles_m.size(); ++is) {
-      particles_m[is].sync(minipic::device, minipic::host);
-    }
-
-    // Interpolate from global field to particles
-    DEBUG("  -> start interpolate ");
-
-    operators::interpolate(em_m, particles_m);
-
-    DEBUG("  -> stop interpolate");
-
-    // Push all particles
-    DEBUG("  -> start push ");
-
-    operators::push(particles_m, params.dt);
-
-    DEBUG("  -> stop push");
-
-    // Do boundary conditions on global domain
-    DEBUG("  -> Patch 0: start pushBC");
-
-    operators::pushBC(params, particles_m);
-
-    DEBUG("  -> stop pushBC");
-
-    em_m.sync(minipic::host, minipic::device);
-    for (size_t is = 0; is < particles_m.size(); ++is) {
-      particles_m[is].sync(minipic::host, minipic::device);
-    }
-
-#if defined(MINIPIC_DEBUG)
-    // check particles
-    for (size_t is = 0; is < particles_m.size(); ++is) {
-      particles_m[is].check(inf_m[0], sup_m[0],
-                            inf_m[1], sup_m[1],
-                            inf_m[2], sup_m[2]);
-    }
-#endif
-
-    // Projection in local field
-    if (params.current_projection) {
-
-      for (size_t is = 0; is < particles_m.size(); ++is) {
-        particles_m[is].sync(minipic::device, minipic::host);
-      }
-
-      // Projection directly in the global grid
-      DEBUG("  ->  start projection");
-
-      operators::project(params, em_m, particles_m);
-
-      DEBUG("  ->  stop projection");
-
-      for (size_t is = 0; is < particles_m.size(); ++is) {
-        particles_m[is].sync(minipic::host, minipic::device);
-      }
-    }
-
-    // __________________________________________________________________
-    // Sum all species contribution in the local and global current grids
-
-    if (params.current_projection || params.n_particles > 0) {
-
-      em_m.sync(minipic::host, minipic::device);
-      for (size_t is = 0; is < particles_m.size(); ++is) {
-        particles_m[is].sync(minipic::host, minipic::device);
-      }
-
-      // Perform the boundary conditions for current
-      DEBUG("  -> start current BC")
-
-      operators::currentBC(params, em_m);
-
-      DEBUG("  -> stop current BC")
-
-    } // end if current projection
-
-    // __________________________________________________________________
-    // Maxwell solver
-
-    if (params.maxwell_solver) {
-
-      em_m.sync(minipic::device, minipic::host);
-
-      // Generate a laser field with an antenna
-      for (size_t iantenna = 0; iantenna < params.antenna_profiles_m.size(); iantenna++) {
-        operators::antenna(params,
-                           em_m,
-                           params.antenna_profiles_m[iantenna],
-                           params.antenna_positions_m[iantenna],
-                           it * params.dt);
-      }
-
-      // Solve the Maxwell equation
-      DEBUG("  -> start solve Maxwell")
-
-      operators::solve_maxwell(params, em_m);
-
-      DEBUG("  -> stop solve Maxwell")
-
-      em_m.sync(minipic::host, minipic::device);
-
-      // Boundary conditions on EM fields
-      DEBUG("  -> start solve BC")
-
-      operators::solveBC(params, em_m);
-
-      DEBUG("  -> end solve BC")
-
-    } // end test params.maxwell_solver
+    managers::iterate(params, em_m, particles_m, it);
   }
 
   // ________________________________________________________________
