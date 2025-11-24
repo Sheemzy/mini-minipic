@@ -52,6 +52,13 @@ set(
   STRING
   "Which setup to build and run with (must be the stem name of a valid .cpp file in src/setups/)"
 )
+set(
+  MINIPIC_KOKKOS_SOURCE_DIRECTORY
+  "${CMAKE_CURRENT_SOURCE_DIR}/external/kokkos"
+  CACHE
+  PATH
+  "Path to the local source directory of Kokkos"
+)
 
 # _________________________________________________________________
 # Debug mode
@@ -102,17 +109,26 @@ project(
 # __________________________________________________________________
 # Dependencies
 
-find_package(Kokkos QUIET)
+find_package(Kokkos 4.6.1 QUIET)
 if(Kokkos_FOUND)
   message(STATUS "Kokkos provided as installed: ${Kokkos_DIR} (version \"${Kokkos_VERSION}\")")
   message(STATUS "  With backend: ${Kokkos_DEVICES}")
   message(STATUS "  With options: ${Kokkos_OPTIONS}")
   message(STATUS "  For architectures: ${Kokkos_ARCH}")
-elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/kokkos/CMakeLists.txt")
-  message(STATUS "Kokkos submodule found. Using the submodule.")
+elseif(EXISTS "${MINIPIC_KOKKOS_SOURCE_DIRECTORY}/CMakeLists.txt")
+  message(STATUS "Kokkos provided as a submodule: ${MINIPIC_KOKKOS_SOURCE_DIRECTORY}")
   add_subdirectory(external/kokkos)
 else()
-  message(FATAL_ERROR "Kokkos not found. Try running: git submodule update --init --recursive")
+  message(STATUS "Kokkos downloaded: ${MINIPIC_KOKKOS_SOURCE_DIRECTORY}")
+  include(FetchContent)
+  FetchContent_Declare(
+    kokkos
+    DOWNLOAD_EXTRACT_TIMESTAMP ON
+    URL https://github.com/kokkos/kokkos/releases/download/4.6.01/kokkos-4.6.01.tar.gz
+    URL_HASH SHA256=b9d70e4653b87a06dbb48d63291bf248058c7c7db4bd91979676ad5609bb1a3a
+    SOURCE_DIR "${MINIPIC_KOKKOS_SOURCE_DIRECTORY}"
+  )
+  FetchContent_MakeAvailable(kokkos)
 endif()
 
 # __________________________________________________________________
