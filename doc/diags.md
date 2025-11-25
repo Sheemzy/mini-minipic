@@ -12,22 +12,22 @@ Please [follow the documentation](./python_tools.md#installation) to install it.
 
 ### `plot_energy_balance.py`
 
-Plot the energy balance of the simulation using the scalars
+Plot the energy balance of the simulation using the scalars.
 
-| Option | Long Option | Description              |
-|--------|-------------|--------------------------|
-| `-f`   | `--folder`  | Path to the diags folder |
+| Option | Long Option | Description                                                              |
+|--------|-------------|--------------------------------------------------------------------------|
+| `-f`   | `--folder`  | Path to the diags folder (default to `diag` folder in current directory) |
 
 ```bash
 # Example
-python plot_energy_balance.py -f diags/
+python plot_energy_balance.py
 ```
 
 <img title="field diag example" alt="field diag example" src="./images/energy_balance.svg" height="300">
 
 ### `plot_particle_binning.py`
 
-Plot particle binning diags (1D, 2D or 3D) only for the custom binary format
+Plot particle binning diags (1D, 2D or 3D) only for the custom binary format.
 
 | Positional argument | Description              |
 |---------------------|--------------------------|
@@ -65,7 +65,7 @@ Plot a field diag using Matplotlib (2D slice)
 
 ```bash
 # Example
-python plot_field.py -f diags/Ez_200.bin
+python plot_field.py diags/Ez_200.bin
 ```
 
 <img title="field diag example" alt="field diag example" src="./images/Ez_200.png" height="300">
