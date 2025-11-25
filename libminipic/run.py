@@ -160,7 +160,7 @@ def run():
     parser.add_argument(
         "-j",
         "--parallel",
-        help="Number of jobs to use for the compilation, default to 4",
+        help="number of jobs to use for the compilation, default to 4",
         type=int,
         default=4
     )

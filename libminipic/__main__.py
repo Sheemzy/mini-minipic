@@ -23,8 +23,9 @@ def execute(function):
         print_failure(exception)
         return 2
 
-    except:
+    except Exception as _:
         print_failure("Unexpected error")
+        # would return 1 to the terminal
         raise
 
 

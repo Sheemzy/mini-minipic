@@ -62,9 +62,9 @@ If you want to skip the porting part, you can directly start from the `src/kokko
 
 - [Code structure](./doc/code_structure.md)
 - [Compilation](./doc/compilation.md)
-- [Setups and how to create them](./doc/setups.md)
 - [Python tools for validation](./doc/python_tools.md)
 - [Plot diags](./doc/diags.md)
+- [Setups and how to create them](./doc/setups.md)
 
 ## Publications
 

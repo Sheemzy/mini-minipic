@@ -3,7 +3,6 @@
 import importlib
 import os
 import re
-import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -62,7 +61,7 @@ def validate():
     )
     parser.add_argument(
         "--threshold",
-        help="threshold for the validation",
+        help=f"threshold for the validation (default to {THRESHOLD})",
         default=THRESHOLD,
         type=float,
     )

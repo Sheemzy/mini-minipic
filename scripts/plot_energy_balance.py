@@ -2,6 +2,7 @@
 
 import argparse
 import glob
+import os
 
 import numpy as np
 from matplotlib import *
@@ -36,7 +37,11 @@ rcParams["ytick.minor.width"] = 1.5
 parser = argparse.ArgumentParser(description="Print 3D diag")
 
 parser.add_argument(
-    "folder", type=str, help="Path toward diags folder", default="diags"
+    "-f",
+    "--folder",
+    type=str,
+    help="Path toward diags folder (default to 'diags' folder in current working directory)",
+    default=os.path.join(os.getcwd(), "diags"),
 )
 
 args = parser.parse_args()
