@@ -186,4 +186,4 @@ The complete list is:
 - `verif_Efield_cst.py`;
 - `verif_kinetic_energy.py`.
 
-Please refer to each script for its use.
+Please refer to the [diags section](./diags.md).
