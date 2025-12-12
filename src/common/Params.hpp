@@ -11,13 +11,11 @@
 #include "Headers.hpp"
 #include "Random.hpp"
 #include "Tools.hpp"
-#include <chrono>
 #include <csignal>
 #include <cstdio>
-#include <fstream>
 #include <functional>
 #include <iostream>
-#include <math.h>
+#include <cmath>
 #include <vector>
 
 // ___________________________________________________________________

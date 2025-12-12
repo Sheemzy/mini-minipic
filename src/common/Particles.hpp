@@ -13,10 +13,7 @@
 #pragma once
 
 #include <cstdio>
-
-#include <iomanip>
-#include <math.h>
-#include <random>
+#include <cmath>
 
 // ________________________________________________________
 //
@@ -87,7 +84,7 @@ public:
   //! \brief Gamma accessor using the momentum
   //! \param[in] ip particle index
   INLINE double gamma(unsigned int ip) {
-    return sqrt(1 + mx_h_m(ip) * mx_h_m(ip) + my_h_m(ip) * my_h_m(ip) + mz_h_m(ip) * mz_h_m(ip));
+    return std::sqrt(1 + mx_h_m(ip) * mx_h_m(ip) + my_h_m(ip) * my_h_m(ip) + mz_h_m(ip) * mz_h_m(ip));
   }
 
   // __________________________________________________________________________
@@ -318,7 +315,7 @@ public:
         "kinetic_energy_on_device",
         n_particles_m,
         KOKKOS_LAMBDA(const int ip, double &lsum) {
-          const double gamma = sqrt(1. + mx(ip) * mx(ip) + my(ip) * my(ip) + mz(ip) * mz(ip));
+          const double gamma = std::sqrt(1. + mx(ip) * mx(ip) + my(ip) * my(ip) + mz(ip) * mz(ip));
           lsum += w(ip) * (gamma - 1.);
         },
         kinetic_energy);
@@ -482,7 +479,7 @@ private:
     double kinetic_energy = 0;
 
     for (size_t ip = 0; ip < size(); ++ip) {
-      const double gamma = sqrt(1. + mx_h_m(ip) * mx_h_m(ip) + my_h_m(ip) * my_h_m(ip) + mz_h_m(ip) * mz_h_m(ip));
+      const double gamma = std::sqrt(1. + mx_h_m(ip) * mx_h_m(ip) + my_h_m(ip) * my_h_m(ip) + mz_h_m(ip) * mz_h_m(ip));
       kinetic_energy += weight_h_m(ip) * (gamma - 1.);
     }
 

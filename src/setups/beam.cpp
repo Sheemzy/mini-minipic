@@ -5,6 +5,8 @@
 
 /* _____________________________________________________________________ */
 
+#include <cmath>
+
 #include "Setup.hpp"
 
 //! \brief Functiun to setup all input parameters
@@ -16,7 +18,7 @@ void setup(Params &params) {
   // Physics parameters
   const double temperature  = 0.1 / 511.;
   const double n0           = 1;
-  const double debye_length = sqrt(temperature / n0);
+  const double debye_length = std::sqrt(temperature / n0);
   const double v_drift      = 0.9;
 
   const double dx = debye_length / 8;
