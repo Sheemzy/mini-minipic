@@ -26,10 +26,6 @@ void setup(Params &params) {
   params.ny_cells = 32;
   params.nz_cells = 32;
 
-  // const double dx = (params.sup_x - params.inf_x) / params.nx_cells;
-  // const double dy = (params.sup_y - params.inf_y) / params.ny_cells;
-  // const double dz = (params.sup_z - params.inf_z) / params.nz_cells;
-
   params.dt = 0.9;
 
   params.simulation_time = 300 * params.dt;
