@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install libminipic
+        run: pip install .
+      - name: Prepare, build, run, verify
+        run: mini-run --config cpu_openmp --implementation kokkos
+        env:
+          OMP_PROC_BIND: spread
+          OMP_PLACES: threads
