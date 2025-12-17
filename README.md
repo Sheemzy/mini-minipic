@@ -9,7 +9,7 @@
 ## Presentation
 
 (mini)miniPIC is a playground for computer science and HPC experiments applied to the Particle-In-Cell method.
-The project is based on the [miniPIC](https://github.com/Maison-de-la-Simulation/miniPIC) solver.
+The project is based on the [miniPIC](https://github.com/Maison-de-la-Simulation/miniPIC) pedagogical solver.
 
 > [!WARNING]
 > (mini)miniPIC is not a code intended to be used for numerical simulation of physical cases.
