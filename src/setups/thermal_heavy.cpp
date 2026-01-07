@@ -28,7 +28,7 @@ void setup(Params &params) {
 
   params.dt = 0.9;
 
-  params.simulation_time = 300 * params.dt;
+  params.simulation_time = 200 * params.dt;
 
   // Species
 
@@ -43,8 +43,8 @@ void setup(Params &params) {
 
   // name, mass, charge, temperature, density profile, drift velocity, particles per cell,
   // position initialization
-  params.add_species("electron", 1, -1, 1e-2, profile, {0, 0, 0}, 8 * 10, "random", "cell");
-  params.add_species("proton", 1836.125, 1, 1e-2, profile, {0, 0, 0}, 8 * 10, "electron", "cell");
+  params.add_species("electron", 1, -1, 1e-2, profile, {0, 0, 0}, 8, "random", "cell");
+  params.add_species("proton", 1836.125, 1, 1e-2, profile, {0, 0, 0}, 8, "electron", "cell");
 
   // Momentum correction at init
   params.momentum_correction = false;
