@@ -22,9 +22,9 @@ void setup(Params &params) {
   params.sup_y = 1.;
   params.sup_z = 1.;
 
-  params.nx_cells = 32 * 4;
-  params.ny_cells = 32 * 4;
-  params.nz_cells = 32 * 4;
+  params.nx_cells = 32 * 3;
+  params.ny_cells = 32 * 3;
+  params.nz_cells = 32 * 3;
 
   params.dt = 0.9;
 
@@ -43,8 +43,8 @@ void setup(Params &params) {
 
   // name, mass, charge, temperature, density profile, drift velocity, particles per cell,
   // position initialization
-  params.add_species("electron", 1, -1, 1e-2, profile, {0, 0, 0}, 8, "random", "cell");
-  params.add_species("proton", 1836.125, 1, 1e-2, profile, {0, 0, 0}, 8, "electron", "cell");
+  params.add_species("electron", 1, -1, 1e-2, profile, {0, 0, 0}, 8 * 2, "random", "cell");
+  params.add_species("proton", 1836.125, 1, 1e-2, profile, {0, 0, 0}, 8 * 2, "electron", "cell");
 
   // Momentum correction at init
   params.momentum_correction = false;
