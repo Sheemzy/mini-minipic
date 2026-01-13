@@ -426,7 +426,7 @@ void pushBC(const Params &params, std::vector<Particles> &particles) {
       Kokkos::fence();
 
     } // End loop on species
-  }   // if type of conditions
+  } // if type of conditions
 }
 
 //! \brief Current projection directly in the global array.
@@ -555,13 +555,18 @@ void project(const Params &params, ElectroMagn &em,
       em.Jz_h_m(ixp + 1, iyp + 1, izd + 1) +=
           (coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jzp;
     } // end for each particles
-  }   // end for each species
+  } // end for each species
 }
 
 //! \brief Solve Maxwell equations to compute EM fields.
 //! \param[in] params Constant global parameters.
 //! \param[in] em Electromagnetic fields.
 void solve_maxwell(const Params &params, ElectroMagn &em) {
+
+  using ExecSpace = Kokkos::DefaultExecutionSpace;
+  using MemSpace = ExecSpace::memory_space;
+
+  const std::string _region_name = "solve_maxwell";
   const double dt = params.dt;
   const double dt_over_dx = params.dt * params.inv_dx;
   const double dt_over_dy = params.dt * params.inv_dy;
@@ -570,82 +575,98 @@ void solve_maxwell(const Params &params, ElectroMagn &em) {
   /////     Solve Maxwell Ampere (E)
   // Electric field Ex (d,p,p)
 
-  ElectroMagn::hostview_t Ex = em.Ex_h_m;
-  ElectroMagn::hostview_t Ey = em.Ey_h_m;
-  ElectroMagn::hostview_t Ez = em.Ez_h_m;
+  ElectroMagn::view_t Ex = em.Ex_m;
+  ElectroMagn::view_t Ey = em.Ey_m;
+  ElectroMagn::view_t Ez = em.Ez_m;
 
-  ElectroMagn::hostview_t Bx = em.Bx_h_m;
-  ElectroMagn::hostview_t By = em.By_h_m;
-  ElectroMagn::hostview_t Bz = em.Bz_h_m;
+  ElectroMagn::view_t Bx = em.Bx_m;
+  ElectroMagn::view_t By = em.By_m;
+  ElectroMagn::view_t Bz = em.Bz_m;
+
+  ElectroMagn::hostview_t Ex_h = em.Ex_h_m;
+  ElectroMagn::hostview_t Ey_h = em.Ey_h_m;
+  ElectroMagn::hostview_t Ez_h = em.Ez_h_m;
+
+  ElectroMagn::hostview_t Bx_h = em.Bx_h_m;
+  ElectroMagn::hostview_t By_h = em.By_h_m;
+  ElectroMagn::hostview_t Bz_h = em.Bz_h_m;
+
+  Kokkos::deep_copy(Ex, Ex_h);
+  Kokkos::deep_copy(Ey, Ey_h);
+  Kokkos::deep_copy(Ez, Ez_h);
+  Kokkos::deep_copy(Bx, Bx_h);
+  Kokkos::deep_copy(By, By_h);
+  Kokkos::deep_copy(Bz, Bz_h);
 
   // Electric field Ex (d,p,p)
-  for (int ix = 0; ix < em.nx_d_m; ++ix) {
-    for (int iy = 0; iy < em.ny_p_m; ++iy) {
-      for (int iz = 0; iz < em.nz_p_m; ++iz) {
-        Ex(ix, iy, iz) += -dt * em.Jx_h_m(ix, iy + 1, iz + 1) +
+  Kokkos::parallel_for(
+      _region_name + "::compute Ex",
+      Kokkos::MDRangePolicy(ExecSpace{}, {0, 0, 0},
+                            {em.nx_d_m, em.ny_p_m, em.nz_p_m}),
+      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
+        Ex(ix, iy, iz) += -dt * em.Jx_m(ix, iy + 1, iz + 1) +
                           dt_over_dy * (Bz(ix, iy + 1, iz) - Bz(ix, iy, iz)) -
                           dt_over_dz * (By(ix, iy, iz + 1) - By(ix, iy, iz));
-      }
-    }
-  }
-
+      });
   // Electric field Ey (p,d,p)
-  for (int ix = 0; ix < em.nx_p_m; ++ix) {
-    for (int iy = 0; iy < em.ny_d_m; ++iy) {
-      for (int iz = 0; iz < em.nz_p_m; ++iz) {
-        Ey(ix, iy, iz) += -dt * em.Jy_h_m(ix + 1, iy, iz + 1) -
+  Kokkos::parallel_for(
+      _region_name + "::compute Ey",
+      Kokkos::MDRangePolicy(ExecSpace{}, {0, 0, 0},
+                            {em.nx_p_m, em.ny_d_m, em.nz_p_m}),
+      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
+        Ey(ix, iy, iz) += -dt * em.Jy_m(ix + 1, iy, iz + 1) -
                           dt_over_dx * (Bz(ix + 1, iy, iz) - Bz(ix, iy, iz)) +
                           dt_over_dz * (Bx(ix, iy, iz + 1) - Bx(ix, iy, iz));
-      }
-    }
-  }
-
+      });
   // Electric field Ez (p,p,d)
-
-  for (int ix = 0; ix < em.nx_p_m; ++ix) {
-    for (int iy = 0; iy < em.ny_p_m; ++iy) {
-      for (int iz = 0; iz < em.nz_d_m; ++iz) {
-        Ez(ix, iy, iz) += -dt * em.Jz_h_m(ix + 1, iy + 1, iz) +
+  Kokkos::parallel_for(
+      _region_name + "::compute Ez",
+      Kokkos::MDRangePolicy(ExecSpace{}, {0, 0, 0},
+                            {em.nx_p_m, em.ny_p_m, em.nz_d_m}),
+      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
+        Ez(ix, iy, iz) += -dt * em.Jz_m(ix + 1, iy + 1, iz) +
                           dt_over_dx * (By(ix + 1, iy, iz) - By(ix, iy, iz)) -
                           dt_over_dy * (Bx(ix, iy + 1, iz) - Bx(ix, iy, iz));
-      }
-    }
-  }
+      });
+  Kokkos::fence();
 
   /////     Solve Maxwell Faraday (B)
 
   // Magnetic field Bx (p,d,d)
-
-  for (int ix = 0; ix < em.nx_p_m; ++ix) {
-    for (int iy = 1; iy < em.ny_d_m - 1; ++iy) {
-      for (int iz = 1; iz < em.nz_d_m - 1; ++iz) {
+  Kokkos::parallel_for(
+      _region_name + "::compute Bx",
+      Kokkos::MDRangePolicy(ExecSpace{}, {0, 1, 1},
+                            {em.nx_p_m, em.ny_d_m - 1, em.nz_d_m - 1}),
+      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
         Bx(ix, iy, iz) += -dt_over_dy * (Ez(ix, iy, iz) - Ez(ix, iy - 1, iz)) +
                           dt_over_dz * (Ey(ix, iy, iz) - Ey(ix, iy, iz - 1));
-      }
-    }
-  }
-
+      });
   // Magnetic field By (d,p,d)
-
-  for (int ix = 1; ix < em.nx_d_m - 1; ++ix) {
-    for (int iy = 0; iy < em.ny_p_m; ++iy) {
-      for (int iz = 1; iz < em.nz_d_m - 1; ++iz) {
+  Kokkos::parallel_for(
+      _region_name + "::compute By",
+      Kokkos::MDRangePolicy(ExecSpace{}, {1, 0, 1},
+                            {em.nx_d_m - 1, em.ny_p_m, em.nz_d_m - 1}),
+      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
         By(ix, iy, iz) += -dt_over_dz * (Ex(ix, iy, iz) - Ex(ix, iy, iz - 1)) +
                           dt_over_dx * (Ez(ix, iy, iz) - Ez(ix - 1, iy, iz));
-      }
-    }
-  }
-
+      });
   // Magnetic field Bz (d,d,p)
-
-  for (int ix = 1; ix < em.nx_d_m - 1; ++ix) {
-    for (int iy = 1; iy < em.ny_d_m - 1; ++iy) {
-      for (int iz = 0; iz < em.nz_p_m; ++iz) {
+  Kokkos::parallel_for(
+      _region_name + "::compute Bz",
+      Kokkos::MDRangePolicy(ExecSpace{}, {1, 1, 0},
+                            {em.nx_d_m - 1, em.ny_d_m - 1, em.nz_p_m}),
+      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
         Bz(ix, iy, iz) += -dt_over_dx * (Ey(ix, iy, iz) - Ey(ix - 1, iy, iz)) +
                           dt_over_dy * (Ex(ix, iy, iz) - Ex(ix, iy - 1, iz));
-      }
-    }
-  }
+      });
+  Kokkos::fence();
+
+  Kokkos::deep_copy(Ex_h, Ex);
+  Kokkos::deep_copy(Ey_h, Ey);
+  Kokkos::deep_copy(Ez_h, Ez);
+  Kokkos::deep_copy(Bx_h, Bx);
+  Kokkos::deep_copy(By_h, By);
+  Kokkos::deep_copy(Bz_h, Bz);
 
 } // end solve
 
@@ -876,7 +897,6 @@ void solveBC(const Params &params, ElectroMagn &em) {
         });
 
     Kokkos::fence();
-
   } else if (params.boundary_condition == "reflective") {
 
     ElectroMagn::view_t Bx = em.Bx_m;
