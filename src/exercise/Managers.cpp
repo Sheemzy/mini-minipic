@@ -8,6 +8,24 @@
 #include "Managers.hpp"
 #include "Operators.hpp"
 
+#include "GraphUtils.hpp"
+
+namespace best_team_namespace {
+
+GraphUtils::graph_t &GraphUtils::get_graph() {
+  // We intentionally leak the work graph to keep it alive for the whole
+  // program and avoid Kokkos finalization issues.
+  static graph_t *graph = []() { return new graph_t(); }();
+
+  return *graph;
+}
+
+int &GraphUtils::get_it() {
+  static int it = 0;
+  return it;
+}
+} // namespace best_team_namespace
+
 namespace managers {
 
 void initialize(const Params &params, ElectroMagn &em,
@@ -19,23 +37,15 @@ void initialize(const Params &params, ElectroMagn &em,
               << "\n"
               << std::endl;
 
-    em.sync(minipic::device, minipic::host);
-    for (std::size_t is = 0; is < particles.size(); ++is) {
-      particles[is].sync(minipic::device, minipic::host);
-    }
-
     operators::interpolate(em, particles);
     operators::push_momentum(particles, -0.5 * params.dt);
-
-    em.sync(minipic::host, minipic::device);
-    for (std::size_t is = 0; is < particles.size(); ++is) {
-      particles[is].sync(minipic::host, minipic::device);
-    }
   }
 }
 
 void iterate(const Params &params, ElectroMagn &em,
              std::vector<Particles> &particles, int it) {
+
+  best_team_namespace::GraphUtils::get_it() = it;
   if (params.current_projection || params.n_particles > 0) {
 
     DEBUG("  -> start reset current");
@@ -43,11 +53,6 @@ void iterate(const Params &params, ElectroMagn &em,
     em.reset_currents(minipic::device);
 
     DEBUG("  -> stop reset current");
-  }
-
-  em.sync(minipic::device, minipic::host);
-  for (std::size_t is = 0; is < particles.size(); ++is) {
-    particles[is].sync(minipic::device, minipic::host);
   }
 
   // Interpolate from global field to particles
@@ -64,11 +69,6 @@ void iterate(const Params &params, ElectroMagn &em,
 
   DEBUG("  -> stop push");
 
-  em.sync(minipic::host, minipic::device);
-  for (std::size_t is = 0; is < particles.size(); ++is) {
-    particles[is].sync(minipic::host, minipic::device);
-  }
-
   // Do boundary conditions on global domain
   DEBUG("  -> Patch 0: start pushBC");
 
@@ -76,20 +76,8 @@ void iterate(const Params &params, ElectroMagn &em,
 
   DEBUG("  -> stop pushBC");
 
-#if defined(MINI_MINIPIC_DEBUG)
-  // check particles
-  for (std::size_t is = 0; is < particles.size(); ++is) {
-    particles[is].check(inf_m[0], sup_m[0], inf_m[1], sup_m[1], inf_m[2],
-                        sup_m[2]);
-  }
-#endif
-
   // Projection in local field
   if (params.current_projection) {
-
-    for (std::size_t is = 0; is < particles.size(); ++is) {
-      particles[is].sync(minipic::device, minipic::host);
-    }
 
     // Projection directly in the global grid
     DEBUG("  ->  start projection");
@@ -97,21 +85,12 @@ void iterate(const Params &params, ElectroMagn &em,
     operators::project(params, em, particles);
 
     DEBUG("  ->  stop projection");
-
-    for (std::size_t is = 0; is < particles.size(); ++is) {
-      particles[is].sync(minipic::host, minipic::device);
-    }
   }
 
   // __________________________________________________________________
   // Sum all species contribution in the local and global current grids
 
   if (params.current_projection || params.n_particles > 0) {
-
-    em.sync(minipic::host, minipic::device);
-    for (std::size_t is = 0; is < particles.size(); ++is) {
-      particles[is].sync(minipic::host, minipic::device);
-    }
 
     // Perform the boundary conditions for current
     DEBUG("  -> start current BC")
@@ -127,8 +106,6 @@ void iterate(const Params &params, ElectroMagn &em,
 
   if (params.maxwell_solver) {
 
-    em.sync(minipic::device, minipic::host);
-
     // Generate a laser field with an antenna
     for (std::size_t iantenna = 0; iantenna < params.antenna_profiles_m.size();
          iantenna++) {
@@ -142,8 +119,6 @@ void iterate(const Params &params, ElectroMagn &em,
     operators::solve_maxwell(params, em);
 
     DEBUG("  -> stop solve Maxwell")
-
-    em.sync(minipic::host, minipic::device);
 
     // Boundary conditions on EM fields
     DEBUG("  -> start solve BC")

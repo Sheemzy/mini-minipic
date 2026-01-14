@@ -5,11 +5,13 @@
 
 /* _____________________________________________________________________ */
 
-#include <cmath>
-
+#include "Kokkos_Graph.hpp"
 #include <Kokkos_Core.hpp>
+#include <Kokkos_Profiling_ScopedRegion.hpp>
 
 #include "Operators.hpp"
+
+#include "GraphUtils.hpp"
 
 namespace operators {
 
@@ -45,11 +47,17 @@ double sum_device(typename Particles::view_t view) {
 //! \returns Sum of the power of all values.
 double sum_power(ElectroMagn::hostview_t v, const int power) {
   double sum = 0;
-  for (std::size_t i = 0; i < v.extent(0); i++)
-    for (std::size_t j = 0; j < v.extent(1); j++)
-      for (std::size_t k = 0; k < v.extent(2); k++) {
-        sum += std::pow(v(i, j, k), power);
-      }
+
+  using mdrange_policy =
+      Kokkos::MDRangePolicy<Kokkos::DefaultHostExecutionSpace, Kokkos::Rank<3>>;
+  Kokkos::parallel_reduce(
+      "sum_field_on_host",
+      mdrange_policy({0, 0, 0}, {v.extent(0), v.extent(1), v.extent(2)}),
+      KOKKOS_LAMBDA(const int ix, const int iy, const int iz,
+                    double &local_sum) {
+        local_sum += Kokkos::pow(v(ix, iy, iz), power);
+      },
+      sum);
 
   return sum;
 }
@@ -79,155 +87,182 @@ double sum_power(ElectroMagn::view_t v, const int power) {
 //! each particle \param[in] em  global electromagnetic fields \param[in]
 //! particles  vector of particle species
 void interpolate(ElectroMagn &em, std::vector<Particles> &particles) {
+  Kokkos::Profiling::pushRegion("interpolate");
+  const auto inv_dx_m = em.inv_dx_m;
+  const auto inv_dy_m = em.inv_dy_m;
+  const auto inv_dz_m = em.inv_dz_m;
 
   for (std::size_t is = 0; is < particles.size(); is++) {
 
     const std::size_t n_particles = particles[is].size();
 
-    ElectroMagn::hostview_t Ex = em.Ex_h_m;
-    ElectroMagn::hostview_t Ey = em.Ey_h_m;
-    ElectroMagn::hostview_t Ez = em.Ez_h_m;
+    ElectroMagn::view_t Ex = em.Ex_m;
+    ElectroMagn::view_t Ey = em.Ey_m;
+    ElectroMagn::view_t Ez = em.Ez_m;
 
-    ElectroMagn::hostview_t Bx = em.Bx_h_m;
-    ElectroMagn::hostview_t By = em.By_h_m;
-    ElectroMagn::hostview_t Bz = em.Bz_h_m;
+    ElectroMagn::view_t Bx = em.Bx_m;
+    ElectroMagn::view_t By = em.By_m;
+    ElectroMagn::view_t Bz = em.Bz_m;
 
-    for (std::size_t part = 0; part < n_particles; ++part) {
-      // Calculate normalized positions
-      const double ixn = particles[is].x_h_m(part) * em.inv_dx_m;
-      const double iyn = particles[is].y_h_m(part) * em.inv_dy_m;
-      const double izn = particles[is].z_h_m(part) * em.inv_dz_m;
+    Particles::view_t x = particles[is].x_m;
+    Particles::view_t y = particles[is].y_m;
+    Particles::view_t z = particles[is].z_m;
 
-      // Compute indexes in global primal grid
-      const unsigned int ixp = floor(ixn);
-      const unsigned int iyp = floor(iyn);
-      const unsigned int izp = floor(izn);
+    Particles::view_t Exp = particles[is].Ex_m;
+    Particles::view_t Eyp = particles[is].Ey_m;
+    Particles::view_t Ezp = particles[is].Ez_m;
 
-      // Compute indexes in global dual grid
-      const unsigned int ixd = floor(ixn + 0.5);
-      const unsigned int iyd = floor(iyn + 0.5);
-      const unsigned int izd = floor(izn + 0.5);
+    Particles::view_t Bxp = particles[is].Bx_m;
+    Particles::view_t Byp = particles[is].By_m;
+    Particles::view_t Bzp = particles[is].Bz_m;
 
-      // Compute interpolation coeff, p = primal, d = dual
+    Kokkos::parallel_for(
+        n_particles,
+        KOKKOS_LAMBDA(const int part) {
+          //  [=, &Ex](const int part) {
 
-      // interpolation electric field
-      // Ex (d, p, p)
-      {
-        const double coeffs[3] = {ixn + 0.5, iyn, izn};
+          // // Calculate normalized positions
+          const double ixn = x(part) * inv_dx_m;
+          const double iyn = y(part) * inv_dy_m;
+          const double izn = z(part) * inv_dz_m;
 
-        const double v00 = Ex(ixd, iyp, izp) * (1 - coeffs[0]) +
-                           Ex(ixd + 1, iyp, izp) * coeffs[0];
-        const double v01 = Ex(ixd, iyp, izp + 1) * (1 - coeffs[0]) +
-                           Ex(ixd + 1, iyp, izp + 1) * coeffs[0];
-        const double v10 = Ex(ixd, iyp + 1, izp) * (1 - coeffs[0]) +
-                           Ex(ixd + 1, iyp + 1, izp) * coeffs[0];
-        const double v11 = Ex(ixd, iyp + 1, izp + 1) * (1 - coeffs[0]) +
-                           Ex(ixd + 1, iyp + 1, izp + 1) * coeffs[0];
-        const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
-        const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
+          // // Compute indexes in global primal grid
+          const unsigned int ixp = Kokkos::floor(ixn);
+          const unsigned int iyp = Kokkos::floor(iyn);
+          const unsigned int izp = Kokkos::floor(izn);
 
-        particles[is].Ex_h_m(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
-      }
+          // Compute indexes in global dual grid
+          const unsigned int ixd = Kokkos::floor(ixn + 0.5);
+          const unsigned int iyd = Kokkos::floor(iyn + 0.5);
+          const unsigned int izd = Kokkos::floor(izn + 0.5);
 
-      // Ey (p, d, p)
-      {
-        const double coeffs[3] = {ixn, iyn + 0.5, izn};
+          // Compute interpolation coeff, p = primal, d = dual
 
-        const double v00 = Ey(ixp, iyd, izp) * (1 - coeffs[0]) +
-                           Ey(ixp + 1, iyd, izp) * coeffs[0];
-        const double v01 = Ey(ixp, iyd, izp + 1) * (1 - coeffs[0]) +
-                           Ey(ixp + 1, iyd, izp + 1) * coeffs[0];
-        const double v10 = Ey(ixp, iyd + 1, izp) * (1 - coeffs[0]) +
-                           Ey(ixp + 1, iyd + 1, izp) * coeffs[0];
-        const double v11 = Ey(ixp, iyd + 1, izp + 1) * (1 - coeffs[0]) +
-                           Ey(ixp + 1, iyd + 1, izp + 1) * coeffs[0];
-        const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
-        const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
+          // Ex (d, p, p)
+          {
+            const double coeffs[3] = {ixn + 0.5, iyn, izn};
 
-        particles[is].Ey_h_m(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
-      }
+            const double v00 = Ex(ixd, iyp, izp) * (1 - coeffs[0]) +
+                               Ex(ixd + 1, iyp, izp) * coeffs[0];
+            const double v01 = Ex(ixd, iyp, izp + 1) * (1 - coeffs[0]) +
+                               Ex(ixd + 1, iyp, izp + 1) * coeffs[0];
+            const double v10 = Ex(ixd, iyp + 1, izp) * (1 - coeffs[0]) +
+                               Ex(ixd + 1, iyp + 1, izp) * coeffs[0];
+            const double v11 = Ex(ixd, iyp + 1, izp + 1) * (1 - coeffs[0]) +
+                               Ex(ixd + 1, iyp + 1, izp + 1) * coeffs[0];
+            const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
+            const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
 
-      // Ez (p, p, d)
-      {
-        const double coeffs[3] = {ixn, iyn, izn + 0.5};
+            Exp(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
+          }
 
-        const double v00 = Ez(ixp, iyp, izd) * (1 - coeffs[0]) +
-                           Ez(ixp + 1, iyp, izd) * coeffs[0];
-        const double v01 = Ez(ixp, iyp, izd + 1) * (1 - coeffs[0]) +
-                           Ez(ixp + 1, iyp, izd + 1) * coeffs[0];
-        const double v10 = Ez(ixp, iyp + 1, izd) * (1 - coeffs[0]) +
-                           Ez(ixp + 1, iyp + 1, izd) * coeffs[0];
-        const double v11 = Ez(ixp, iyp + 1, izd + 1) * (1 - coeffs[0]) +
-                           Ez(ixp + 1, iyp + 1, izd + 1) * coeffs[0];
-        const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
-        const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
+          // Ey (p, d, p)
+          {
+            const double coeffs[3] = {ixn, iyn + 0.5, izn};
 
-        particles[is].Ez_h_m(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
-      }
+            const double v00 = Ey(ixp, iyd, izp) * (1 - coeffs[0]) +
+                               Ey(ixp + 1, iyd, izp) * coeffs[0];
+            const double v01 = Ey(ixp, iyd, izp + 1) * (1 - coeffs[0]) +
+                               Ey(ixp + 1, iyd, izp + 1) * coeffs[0];
+            const double v10 = Ey(ixp, iyd + 1, izp) * (1 - coeffs[0]) +
+                               Ey(ixp + 1, iyd + 1, izp) * coeffs[0];
+            const double v11 = Ey(ixp, iyd + 1, izp + 1) * (1 - coeffs[0]) +
+                               Ey(ixp + 1, iyd + 1, izp + 1) * coeffs[0];
+            const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
+            const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
 
-      // interpolation magnetic field
-      // Bx (p, d, d)
-      {
-        const double coeffs[3] = {ixn, iyn + 0.5, izn + 0.5};
+            Eyp(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
+          }
 
-        const double v00 = Bx(ixp, iyd, izd) * (1 - coeffs[0]) +
-                           Bx(ixp + 1, iyd, izd) * coeffs[0];
-        const double v01 = Bx(ixp, iyd, izd + 1) * (1 - coeffs[0]) +
-                           Bx(ixp + 1, iyd, izd + 1) * coeffs[0];
-        const double v10 = Bx(ixp, iyd + 1, izd) * (1 - coeffs[0]) +
-                           Bx(ixp + 1, iyd + 1, izd) * coeffs[0];
-        const double v11 = Bx(ixp, iyd + 1, izd + 1) * (1 - coeffs[0]) +
-                           Bx(ixp + 1, iyd + 1, izd + 1) * coeffs[0];
-        const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
-        const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
+          // Ez (p, p, d)
+          {
+            const double coeffs[3] = {ixn, iyn, izn + 0.5};
 
-        particles[is].Bx_h_m(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
-      }
+            const double v00 = Ez(ixp, iyp, izd) * (1 - coeffs[0]) +
+                               Ez(ixp + 1, iyp, izd) * coeffs[0];
+            const double v01 = Ez(ixp, iyp, izd + 1) * (1 - coeffs[0]) +
+                               Ez(ixp + 1, iyp, izd + 1) * coeffs[0];
+            const double v10 = Ez(ixp, iyp + 1, izd) * (1 - coeffs[0]) +
+                               Ez(ixp + 1, iyp + 1, izd) * coeffs[0];
+            const double v11 = Ez(ixp, iyp + 1, izd + 1) * (1 - coeffs[0]) +
+                               Ez(ixp + 1, iyp + 1, izd + 1) * coeffs[0];
+            const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
+            const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
 
-      // By (d, p, d)
-      {
-        const double coeffs[3] = {ixn + 0.5, iyn, izn + 0.5};
+            Ezp(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
+          }
 
-        const double v00 = By(ixd, iyp, izd) * (1 - coeffs[0]) +
-                           By(ixd + 1, iyp, izd) * coeffs[0];
-        const double v01 = By(ixd, iyp, izd + 1) * (1 - coeffs[0]) +
-                           By(ixd + 1, iyp, izd + 1) * coeffs[0];
-        const double v10 = By(ixd, iyp + 1, izd) * (1 - coeffs[0]) +
-                           By(ixd + 1, iyp + 1, izd) * coeffs[0];
-        const double v11 = By(ixd, iyp + 1, izd + 1) * (1 - coeffs[0]) +
-                           By(ixd + 1, iyp + 1, izd + 1) * coeffs[0];
-        const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
-        const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
+          // interpolation magnetic field
+          // Bx (p, d, d)
+          {
+            const double coeffs[3] = {ixn, iyn + 0.5, izn + 0.5};
 
-        particles[is].By_h_m(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
-      }
+            const double v00 = Bx(ixp, iyd, izd) * (1 - coeffs[0]) +
+                               Bx(ixp + 1, iyd, izd) * coeffs[0];
+            const double v01 = Bx(ixp, iyd, izd + 1) * (1 - coeffs[0]) +
+                               Bx(ixp + 1, iyd, izd + 1) * coeffs[0];
+            const double v10 = Bx(ixp, iyd + 1, izd) * (1 - coeffs[0]) +
+                               Bx(ixp + 1, iyd + 1, izd) * coeffs[0];
+            const double v11 = Bx(ixp, iyd + 1, izd + 1) * (1 - coeffs[0]) +
+                               Bx(ixp + 1, iyd + 1, izd + 1) * coeffs[0];
+            const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
+            const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
 
-      // Bz (d, d, p)
-      {
-        const double coeffs[3] = {ixn + 0.5, iyn + 0.5, izn};
+            Bxp(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
+          }
 
-        const double v00 = Bz(ixd, iyd, izp) * (1 - coeffs[0]) +
-                           Bz(ixd + 1, iyd, izp) * coeffs[0];
-        const double v01 = Bz(ixd, iyd, izp + 1) * (1 - coeffs[0]) +
-                           Bz(ixd + 1, iyd, izp + 1) * coeffs[0];
-        const double v10 = Bz(ixd, iyd + 1, izp) * (1 - coeffs[0]) +
-                           Bz(ixd + 1, iyd + 1, izp) * coeffs[0];
-        const double v11 = Bz(ixd, iyd + 1, izp + 1) * (1 - coeffs[0]) +
-                           Bz(ixd + 1, iyd + 1, izp + 1) * coeffs[0];
-        const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
-        const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
+          // By (d, p, d)
+          {
+            const double coeffs[3] = {ixn + 0.5, iyn, izn + 0.5};
 
-        particles[is].Bz_h_m(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
-      }
-    } // End for each particle
+            const double v00 = By(ixd, iyp, izd) * (1 - coeffs[0]) +
+                               By(ixd + 1, iyp, izd) * coeffs[0];
+            const double v01 = By(ixd, iyp, izd + 1) * (1 - coeffs[0]) +
+                               By(ixd + 1, iyp, izd + 1) * coeffs[0];
+            const double v10 = By(ixd, iyp + 1, izd) * (1 - coeffs[0]) +
+                               By(ixd + 1, iyp + 1, izd) * coeffs[0];
+            const double v11 = By(ixd, iyp + 1, izd + 1) * (1 - coeffs[0]) +
+                               By(ixd + 1, iyp + 1, izd + 1) * coeffs[0];
+            const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
+            const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
+
+            Byp(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
+          }
+
+          // Bz (d, d, p)
+          {
+            const double coeffs[3] = {ixn + 0.5, iyn + 0.5, izn};
+
+            const double v00 = Bz(ixd, iyd, izp) * (1 - coeffs[0]) +
+                               Bz(ixd + 1, iyd, izp) * coeffs[0];
+            const double v01 = Bz(ixd, iyd, izp + 1) * (1 - coeffs[0]) +
+                               Bz(ixd + 1, iyd, izp + 1) * coeffs[0];
+            const double v10 = Bz(ixd, iyd + 1, izp) * (1 - coeffs[0]) +
+                               Bz(ixd + 1, iyd + 1, izp) * coeffs[0];
+            const double v11 = Bz(ixd, iyd + 1, izp + 1) * (1 - coeffs[0]) +
+                               Bz(ixd + 1, iyd + 1, izp + 1) * coeffs[0];
+            const double v0 = v00 * (1 - coeffs[1]) + v10 * coeffs[1];
+            const double v1 = v01 * (1 - coeffs[1]) + v11 * coeffs[1];
+
+            Bzp(part) = v0 * (1 - coeffs[2]) + v1 * coeffs[2];
+          }
+        } // End for each particle
+
+    ); // end KOKKOS PARALLEL
+
+    Kokkos::fence();
 
   } // Species loop
+
+  Kokkos::Profiling::popRegion();
 }
 
 //! \brief Move the particle in the space, compute with EM fields interpolate.
 //! \param[in] particles Vector of particle species.
 //! \param[in] dt Time step to use for the pusher.
 void push(std::vector<Particles> &particles, double dt) {
+  Kokkos::Profiling::pushRegion("push");
+
   // For each species
   for (std::size_t is = 0; is < particles.size(); is++) {
 
@@ -236,59 +271,81 @@ void push(std::vector<Particles> &particles, double dt) {
     // q' = dt * (q/2m)
     const double qp = particles[is].charge_m * dt * 0.5 / particles[is].mass_m;
 
-    for (std::size_t ip = 0; ip < n_particles; ++ip) {
-      // 1/2 E
-      double px = qp * particles[is].Ex_h_m(ip);
-      double py = qp * particles[is].Ey_h_m(ip);
-      double pz = qp * particles[is].Ez_h_m(ip);
+    particles[is].sync(minipic::device, minipic::host);
+    Particles::view_t x = particles[is].x_m;
+    Particles::view_t y = particles[is].y_m;
+    Particles::view_t z = particles[is].z_m;
 
-      const double ux = particles[is].mx_h_m(ip) + px;
-      const double uy = particles[is].my_h_m(ip) + py;
-      const double uz = particles[is].mz_h_m(ip) + pz;
+    Particles::view_t mx = particles[is].mx_m;
+    Particles::view_t my = particles[is].my_m;
+    Particles::view_t mz = particles[is].mz_m;
 
-      // gamma-factor
-      double usq = (ux * ux + uy * uy + uz * uz);
-      double gamma = sqrt(1 + usq);
-      double gamma_inv = qp / gamma;
+    Particles::view_t Exp = particles[is].Ex_m;
+    Particles::view_t Eyp = particles[is].Ey_m;
+    Particles::view_t Ezp = particles[is].Ez_m;
 
-      // B, T = Transform to rotate the particle
-      const double tx = gamma_inv * particles[is].Bx_h_m(ip);
-      const double ty = gamma_inv * particles[is].By_h_m(ip);
-      const double tz = gamma_inv * particles[is].Bz_h_m(ip);
-      const double tsq = 1. + (tx * tx + ty * ty + tz * tz);
-      double tsq_inv = 1. / tsq;
+    Particles::view_t Bxp = particles[is].Bx_m;
+    Particles::view_t Byp = particles[is].By_m;
+    Particles::view_t Bzp = particles[is].Bz_m;
 
-      px += ((1.0 + tx * tx - ty * ty - tz * tz) * ux +
-             2.0 * (tx * ty + tz) * uy + 2.0 * (tz * tx - ty) * uz) *
-            tsq_inv;
+    Kokkos::parallel_for(
+        n_particles, KOKKOS_LAMBDA(const int ip) {
+          // 1/2 E
+          double px = qp * Exp(ip);
+          double py = qp * Eyp(ip);
+          double pz = qp * Ezp(ip);
 
-      py += (2.0 * (tx * ty - tz) * ux +
-             (1.0 - tx * tx + ty * ty - tz * tz) * uy +
-             2.0 * (ty * tz + tx) * uz) *
-            tsq_inv;
+          const double ux = mx(ip) + px;
+          const double uy = my(ip) + py;
+          const double uz = mz(ip) + pz;
 
-      pz += (2.0 * (tz * tx + ty) * ux + 2.0 * (ty * tz - tx) * uy +
-             (1.0 - tx * tx - ty * ty + tz * tz) * uz) *
-            tsq_inv;
+          // gamma-factor
+          double usq = (ux * ux + uy * uy + uz * uz);
+          double gamma = Kokkos::sqrt(1 + usq);
+          double gamma_inv = qp / gamma;
 
-      // gamma-factor
-      usq = (px * px + py * py + pz * pz);
-      gamma = sqrt(1 + usq);
+          // B, T = Transform to rotate the particle
+          const double tx = gamma_inv * Bxp(ip);
+          const double ty = gamma_inv * Byp(ip);
+          const double tz = gamma_inv * Bzp(ip);
+          const double tsq = 1. + (tx * tx + ty * ty + tz * tz);
+          double tsq_inv = 1. / tsq;
 
-      // Update inverse gamma factor
-      gamma_inv = 1 / gamma;
+          px += ((1.0 + tx * tx - ty * ty - tz * tz) * ux +
+                 2.0 * (tx * ty + tz) * uy + 2.0 * (tz * tx - ty) * uz) *
+                tsq_inv;
 
-      // Update momentum
-      particles[is].mx_h_m(ip) = px;
-      particles[is].my_h_m(ip) = py;
-      particles[is].mz_h_m(ip) = pz;
+          py += (2.0 * (tx * ty - tz) * ux +
+                 (1.0 - tx * tx + ty * ty - tz * tz) * uy +
+                 2.0 * (ty * tz + tx) * uz) *
+                tsq_inv;
 
-      // Update positions
-      particles[is].x_h_m(ip) += particles[is].mx_h_m(ip) * dt * gamma_inv;
-      particles[is].y_h_m(ip) += particles[is].my_h_m(ip) * dt * gamma_inv;
-      particles[is].z_h_m(ip) += particles[is].mz_h_m(ip) * dt * gamma_inv;
-    }
+          pz += (2.0 * (tz * tx + ty) * ux + 2.0 * (ty * tz - tx) * uy +
+                 (1.0 - tx * tx - ty * ty + tz * tz) * uz) *
+                tsq_inv;
+
+          // gamma-factor
+          usq = (px * px + py * py + pz * pz);
+          gamma = Kokkos::sqrt(1 + usq);
+
+          // Update inverse gamma factor
+          gamma_inv = 1 / gamma;
+
+          // Update momentum
+          mx(ip) = px;
+          my(ip) = py;
+          mz(ip) = pz;
+
+          // Update positions
+          x(ip) += mx(ip) * dt * gamma_inv;
+          y(ip) += my(ip) * dt * gamma_inv;
+          z(ip) += mz(ip) * dt * gamma_inv;
+        });
+
+    Kokkos::fence();
+
   } // Loop on species
+  Kokkos::Profiling::popRegion();
 }
 
 //! \brief Push only the momentum.
@@ -296,6 +353,7 @@ void push(std::vector<Particles> &particles, double dt) {
 //! \param[in] particles Vector of species Particles.
 //! \param[in] dt Time step to use for the pusher.
 void push_momentum(std::vector<Particles> &particles, double dt) {
+  Kokkos::Profiling::pushRegion("push_mortem");
   // for each species
   for (std::size_t is = 0; is < particles.size(); is++) {
 
@@ -304,55 +362,70 @@ void push_momentum(std::vector<Particles> &particles, double dt) {
     // q' = dt * (q/2m)
     const double qp = particles[is].charge_m * dt * 0.5 / particles[is].mass_m;
 
-    for (std::size_t ip = 0; ip < n_particles; ++ip) {
-      // 1/2 E
-      double px = qp * particles[is].Ex_h_m(ip);
-      double py = qp * particles[is].Ey_h_m(ip);
-      double pz = qp * particles[is].Ez_h_m(ip);
+    Particles::view_t mx = particles[is].mx_m;
+    Particles::view_t my = particles[is].my_m;
+    Particles::view_t mz = particles[is].mz_m;
 
-      const double ux = particles[is].mx_h_m(ip) + px;
-      const double uy = particles[is].my_h_m(ip) + py;
-      const double uz = particles[is].mz_h_m(ip) + pz;
+    Particles::view_t Exp = particles[is].Ex_m;
+    Particles::view_t Eyp = particles[is].Ey_m;
+    Particles::view_t Ezp = particles[is].Ez_m;
 
-      // gamma-factor
-      double usq = (ux * ux + uy * uy + uz * uz);
-      double gamma = sqrt(1 + usq);
-      double gamma_inv = qp / gamma;
+    Particles::view_t Bxp = particles[is].Bx_m;
+    Particles::view_t Byp = particles[is].By_m;
+    Particles::view_t Bzp = particles[is].Bz_m;
 
-      // B, T = Transform to rotate the particle
-      const double tx = gamma_inv * particles[is].Bx_h_m(ip);
-      const double ty = gamma_inv * particles[is].By_h_m(ip);
-      const double tz = gamma_inv * particles[is].Bz_h_m(ip);
-      const double tsq = 1. + (tx * tx + ty * ty + tz * tz);
-      double tsq_inv = 1. / tsq;
+    Kokkos::parallel_for(
+        n_particles, KOKKOS_LAMBDA(const int ip) {
+          // 1/2 E
+          double px = qp * Exp(ip);
+          double py = qp * Eyp(ip);
+          double pz = qp * Ezp(ip);
 
-      px += ((1.0 + tx * tx - ty * ty - tz * tz) * ux +
-             2.0 * (tx * ty + tz) * uy + 2.0 * (tz * tx - ty) * uz) *
-            tsq_inv;
+          const double ux = mx(ip) + px;
+          const double uy = my(ip) + py;
+          const double uz = mz(ip) + pz;
 
-      py += (2.0 * (tx * ty - tz) * ux +
-             (1.0 - tx * tx + ty * ty - tz * tz) * uy +
-             2.0 * (ty * tz + tx) * uz) *
-            tsq_inv;
+          // gamma-factor
+          double usq = (ux * ux + uy * uy + uz * uz);
+          double gamma = Kokkos::sqrt(1 + usq);
+          double gamma_inv = qp / gamma;
 
-      pz += (2.0 * (tz * tx + ty) * ux + 2.0 * (ty * tz - tx) * uy +
-             (1.0 - tx * tx - ty * ty + tz * tz) * uz) *
-            tsq_inv;
+          // B, T = Transform to rotate the particle
+          const double tx = gamma_inv * Bxp(ip);
+          const double ty = gamma_inv * Byp(ip);
+          const double tz = gamma_inv * Bzp(ip);
+          const double tsq = 1. + (tx * tx + ty * ty + tz * tz);
+          double tsq_inv = 1. / tsq;
 
-      // gamma-factor
-      usq = (px * px + py * py + pz * pz);
-      gamma = sqrt(1 + usq);
+          px += ((1.0 + tx * tx - ty * ty - tz * tz) * ux +
+                 2.0 * (tx * ty + tz) * uy + 2.0 * (tz * tx - ty) * uz) *
+                tsq_inv;
 
-      // Update inverse gamma factor
-      gamma_inv = 1 / gamma;
+          py += (2.0 * (tx * ty - tz) * ux +
+                 (1.0 - tx * tx + ty * ty - tz * tz) * uy +
+                 2.0 * (ty * tz + tx) * uz) *
+                tsq_inv;
 
-      // Update momentum
-      particles[is].mx_h_m(ip) = px;
-      particles[is].my_h_m(ip) = py;
-      particles[is].mz_h_m(ip) = pz;
-    } // end for particles
+          pz += (2.0 * (tz * tx + ty) * ux + 2.0 * (ty * tz - tx) * uy +
+                 (1.0 - tx * tx - ty * ty + tz * tz) * uz) *
+                tsq_inv;
 
+          // gamma-factor
+          usq = (px * px + py * py + pz * pz);
+          gamma = Kokkos::sqrt(1 + usq);
+
+          // Update inverse gamma factor
+          gamma_inv = 1 / gamma;
+
+          // Update momentum
+          mx(ip) = px;
+          my(ip) = py;
+          mz(ip) = pz;
+        });
+
+    Kokkos::fence();
   } // end for species
+  Kokkos::Profiling::popRegion();
 }
 
 //! \brief Boundaries condition on the particles, periodic
@@ -360,6 +433,7 @@ void push_momentum(std::vector<Particles> &particles, double dt) {
 //! \param[in] params Constant global simulation parameters.
 //! \param[in] particles Vector of species particles.
 void pushBC(const Params &params, std::vector<Particles> &particles) {
+  Kokkos::Profiling::pushRegion("pushBC");
   const double inf_global[3] = {params.inf_x, params.inf_y, params.inf_z};
   const double sup_global[3] = {params.sup_x, params.sup_y, params.sup_z};
 
@@ -427,6 +501,7 @@ void pushBC(const Params &params, std::vector<Particles> &particles) {
 
     } // End loop on species
   } // if type of conditions
+  Kokkos::Profiling::popRegion();
 }
 
 //! \brief Current projection directly in the global array.
@@ -435,145 +510,299 @@ void pushBC(const Params &params, std::vector<Particles> &particles) {
 //! \param[in] particles Vector of species particles.
 void project(const Params &params, ElectroMagn &em,
              std::vector<Particles> &particles) {
+  ElectroMagn::view_t Jx_device = em.Jx_m;
+  ElectroMagn::view_t Jy_device = em.Jy_m;
+  ElectroMagn::view_t Jz_device = em.Jz_m;
+
+#if defined(MINI_MINIPIC_KOKKOS_SCATTER_VIEW)
+  // Use ScatterView
+  Kokkos::Experimental::ScatterView<double ***> scatter_Jx(Jx_device);
+  Kokkos::Experimental::ScatterView<double ***> scatter_Jy(Jy_device);
+  Kokkos::Experimental::ScatterView<double ***> scatter_Jz(Jz_device);
+#else
+  // Use atomic memory traits
+  Kokkos::View<double ***, Kokkos::MemoryTraits<Kokkos::Atomic>> Jx(Jx_device);
+  Kokkos::View<double ***, Kokkos::MemoryTraits<Kokkos::Atomic>> Jy(Jy_device);
+  Kokkos::View<double ***, Kokkos::MemoryTraits<Kokkos::Atomic>> Jz(Jz_device);
+#endif
+
+  const double dt = params.dt;
+
+  const double inv_dx = params.inv_dx;
+  const double inv_dy = params.inv_dy;
+  const double inv_dz = params.inv_dz;
+
+#if (MINI_MINIPIC_DEBUG)
+  int nx_Jx = em.Jx_m.nx_m;
+  int ny_Jx = em.Jx_m.ny_m;
+  int nz_Jx = em.Jx_m.nz_m;
+
+  int nx_Jy = em.Jy_m.nx_m;
+  int ny_Jy = em.Jy_m.ny_m;
+  int nz_Jy = em.Jy_m.nz_m;
+#endif
+
   for (std::size_t is = 0; is < particles.size(); is++) {
 
     const std::size_t n_particles = particles[is].size();
     const double inv_cell_volume_x_q =
         params.inv_cell_volume * particles[is].charge_m;
 
-    Particles::hostview_t mx = particles[is].mx_h_m;
-    Particles::hostview_t my = particles[is].my_h_m;
-    Particles::hostview_t mz = particles[is].mz_h_m;
+    Particles::view_t w = particles[is].weight_m;
 
-    for (std::size_t part = 0; part < n_particles; ++part) {
-      // Delete if already compute by Pusher
-      const double charge_weight =
-          inv_cell_volume_x_q * particles[is].weight_h_m(part);
+    Particles::view_t x = particles[is].x_m;
+    Particles::view_t y = particles[is].y_m;
+    Particles::view_t z = particles[is].z_m;
 
-      const double gamma_inv =
-          1 / std::sqrt(1 + (mx(part) * mx(part) + my(part) * my(part) +
-                             mz(part) * mz(part)));
+    Particles::view_t mx = particles[is].mx_m;
+    Particles::view_t my = particles[is].my_m;
+    Particles::view_t mz = particles[is].mz_m;
 
-      const double vx = mx(part) * gamma_inv;
-      const double vy = my(part) * gamma_inv;
-      const double vz = mz(part) * gamma_inv;
+    Kokkos::parallel_for(
+        n_particles, KOKKOS_LAMBDA(const int part) {
+#if defined(MINI_MINIPIC_KOKKOS_SCATTER_VIEW)
+          auto Jx = scatter_Jx.access();
+          auto Jy = scatter_Jy.access();
+          auto Jz = scatter_Jz.access();
+#endif
+          // Delete if already compute by Pusher
+          // double usq = (moment[0]*moment[0] + moment[1]*moment[1] +
+          // moment[2]*moment[2]); double gamma = sqrt(1+usq); gamma_inv =
+          // 1/gamma;
 
-      const double Jxp = vx * charge_weight;
-      const double Jyp = vy * charge_weight;
-      const double Jzp = vz * charge_weight;
+          const double charge_weight = inv_cell_volume_x_q * w(part);
 
-      // Calculate normalized positions
-      // We come back 1/2 time step back in time for the position because of the
-      // leap frog scheme As a consequence, we also have `+ 1` because the
-      // current grids have 2 additional ghost cells (1 the min and 1 at the max
-      // border) when the direction is primal
-      const double posxn =
-          (particles[is].x_h_m(part) - 0.5 * params.dt * vx) * params.inv_dx +
-          1;
-      const double posyn =
-          (particles[is].y_h_m(part) - 0.5 * params.dt * vy) * params.inv_dy +
-          1;
-      const double poszn =
-          (particles[is].z_h_m(part) - 0.5 * params.dt * vz) * params.inv_dz +
-          1;
+          const double gamma_inv =
+              1 / sqrt(1 + (mx(part) * mx(part) + my(part) * my(part) +
+                            mz(part) * mz(part)));
 
-      // Compute indexes in primal grid
-      const int ixp = (int)(std::floor(posxn));
-      const int iyp = (int)(std::floor(posyn));
-      const int izp = (int)(std::floor(poszn));
+          const double vx = mx(part) * gamma_inv;
+          const double vy = my(part) * gamma_inv;
+          const double vz = mz(part) * gamma_inv;
 
-      // Compute indexes in dual grid
-      const int ixd = (int)std::floor(posxn - 0.5);
-      const int iyd = (int)std::floor(posyn - 0.5);
-      const int izd = (int)std::floor(poszn - 0.5);
+          const double Jxp = vx * charge_weight;
+          const double Jyp = vy * charge_weight;
+          const double Jzp = vz * charge_weight;
 
-      // Projection particle on currant field
-      // Compute interpolation coeff, p = primal, d = dual
+          // Calculate normalized positions
+          // We come back 1/2 time step back in time for the position because of
+          // the leap frog scheme As a consequence, we also have `+ 1` because
+          // the current grids have 2 additional ghost cells (1 the min and 1 at
+          // the max border) when the direction is primal
+          const double posxn = (x(part) - 0.5 * dt * vx) * inv_dx + 1;
+          const double posyn = (y(part) - 0.5 * dt * vy) * inv_dy + 1;
+          const double poszn = (z(part) - 0.5 * dt * vz) * inv_dz + 1;
 
-      double coeffs[3];
+          // Compute indexes in primal grid
+          const int ixp = (int)(floor(posxn));
+          const int iyp = (int)(floor(posyn));
+          const int izp = (int)(floor(poszn));
 
-      coeffs[0] = posxn - 0.5 - ixd;
-      coeffs[1] = posyn - iyp;
-      coeffs[2] = poszn - izp;
+          // Compute indexes in dual grid
+          const int ixd = (int)floor(posxn - 0.5);
+          const int iyd = (int)floor(posyn - 0.5);
+          const int izd = (int)floor(poszn - 0.5);
 
-      em.Jx_h_m(ixd, iyp, izp) +=
-          (1 - coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jxp;
-      em.Jx_h_m(ixd, iyp, izp + 1) +=
-          (1 - coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jxp;
-      em.Jx_h_m(ixd, iyp + 1, izp) +=
-          (1 - coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jxp;
-      em.Jx_h_m(ixd, iyp + 1, izp + 1) +=
-          (1 - coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jxp;
-      em.Jx_h_m(ixd + 1, iyp, izp) +=
-          (coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jxp;
-      em.Jx_h_m(ixd + 1, iyp, izp + 1) +=
-          (coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jxp;
-      em.Jx_h_m(ixd + 1, iyp + 1, izp) +=
-          (coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jxp;
-      em.Jx_h_m(ixd + 1, iyp + 1, izp + 1) +=
-          (coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jxp;
+          // Projection particle on currant field
+          // Compute interpolation coeff, p = primal, d = dual
 
-      coeffs[0] = posxn - ixp;
-      coeffs[1] = posyn - 0.5 - iyd;
-      coeffs[2] = poszn - izp;
+          double coeffs[3];
 
-      em.Jy_h_m(ixp, iyd, izp) +=
-          (1 - coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jyp;
-      em.Jy_h_m(ixp, iyd, izp + 1) +=
-          (1 - coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jyp;
-      em.Jy_h_m(ixp, iyd + 1, izp) +=
-          (1 - coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jyp;
-      em.Jy_h_m(ixp, iyd + 1, izp + 1) +=
-          (1 - coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jyp;
-      em.Jy_h_m(ixp + 1, iyd, izp) +=
-          (coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jyp;
-      em.Jy_h_m(ixp + 1, iyd, izp + 1) +=
-          (coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jyp;
-      em.Jy_h_m(ixp + 1, iyd + 1, izp) +=
-          (coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jyp;
-      em.Jy_h_m(ixp + 1, iyd + 1, izp + 1) +=
-          (coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jyp;
+          coeffs[0] = posxn - 0.5 - ixd;
+          coeffs[1] = posyn - iyp;
+          coeffs[2] = poszn - izp;
 
-      coeffs[0] = posxn - ixp;
-      coeffs[1] = posyn - iyp;
-      coeffs[2] = poszn - 0.5 - izd;
+          Jx(ixd, iyp, izp) +=
+              (1 - coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jxp;
+          Jx(ixd, iyp, izp + 1) +=
+              (1 - coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jxp;
+          Jx(ixd, iyp + 1, izp) +=
+              (1 - coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jxp;
+          Jx(ixd, iyp + 1, izp + 1) +=
+              (1 - coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jxp;
+          Jx(ixd + 1, iyp, izp) +=
+              (coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jxp;
+          Jx(ixd + 1, iyp, izp + 1) +=
+              (coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jxp;
+          Jx(ixd + 1, iyp + 1, izp) +=
+              (coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jxp;
+          Jx(ixd + 1, iyp + 1, izp + 1) +=
+              (coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jxp;
 
-      em.Jz_h_m(ixp, iyp, izd) +=
-          (1 - coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jzp;
-      em.Jz_h_m(ixp, iyp, izd + 1) +=
-          (1 - coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jzp;
-      em.Jz_h_m(ixp, iyp + 1, izd) +=
-          (1 - coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jzp;
-      em.Jz_h_m(ixp, iyp + 1, izd + 1) +=
-          (1 - coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jzp;
-      em.Jz_h_m(ixp + 1, iyp, izd) +=
-          (coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jzp;
-      em.Jz_h_m(ixp + 1, iyp, izd + 1) +=
-          (coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jzp;
-      em.Jz_h_m(ixp + 1, iyp + 1, izd) +=
-          (coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jzp;
-      em.Jz_h_m(ixp + 1, iyp + 1, izd + 1) +=
-          (coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jzp;
-    } // end for each particles
+          coeffs[0] = posxn - ixp;
+          coeffs[1] = posyn - 0.5 - iyd;
+          coeffs[2] = poszn - izp;
+
+          Jy(ixp, iyd, izp) +=
+              (1 - coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jyp;
+          Jy(ixp, iyd, izp + 1) +=
+              (1 - coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jyp;
+          Jy(ixp, iyd + 1, izp) +=
+              (1 - coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jyp;
+          Jy(ixp, iyd + 1, izp + 1) +=
+              (1 - coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jyp;
+          Jy(ixp + 1, iyd, izp) +=
+              (coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jyp;
+          Jy(ixp + 1, iyd, izp + 1) +=
+              (coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jyp;
+          Jy(ixp + 1, iyd + 1, izp) +=
+              (coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jyp;
+          Jy(ixp + 1, iyd + 1, izp + 1) +=
+              (coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jyp;
+
+          coeffs[0] = posxn - ixp;
+          coeffs[1] = posyn - iyp;
+          coeffs[2] = poszn - 0.5 - izd;
+
+          Jz(ixp, iyp, izd) +=
+              (1 - coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jzp;
+          Jz(ixp, iyp, izd + 1) +=
+              (1 - coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jzp;
+          Jz(ixp, iyp + 1, izd) +=
+              (1 - coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jzp;
+          Jz(ixp, iyp + 1, izd + 1) +=
+              (1 - coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jzp;
+          Jz(ixp + 1, iyp, izd) +=
+              (coeffs[0]) * (1 - coeffs[1]) * (1 - coeffs[2]) * Jzp;
+          Jz(ixp + 1, iyp, izd + 1) +=
+              (coeffs[0]) * (1 - coeffs[1]) * (coeffs[2]) * Jzp;
+          Jz(ixp + 1, iyp + 1, izd) +=
+              (coeffs[0]) * (coeffs[1]) * (1 - coeffs[2]) * Jzp;
+          Jz(ixp + 1, iyp + 1, izd + 1) +=
+              (coeffs[0]) * (coeffs[1]) * (coeffs[2]) * Jzp;
+        }); // end for each particles
+
+    Kokkos::fence();
+#if defined(MINI_MINIPIC_KOKKOS_SCATTER_VIEW)
+    Kokkos::Experimental::contribute(Jx_device, scatter_Jx);
+    Kokkos::Experimental::contribute(Jy_device, scatter_Jy);
+    Kokkos::Experimental::contribute(Jz_device, scatter_Jz);
+#endif
   } // end for each species
 }
+
+// Functor pour calculer Ex
+struct ComputeExFunctor {
+  ElectroMagn::view_t Ex, Jx, Bz, By;
+  double dt, dt_over_dy, dt_over_dz;
+
+  ComputeExFunctor(ElectroMagn::view_t Ex, ElectroMagn::view_t Jx,
+                   ElectroMagn::view_t Bz, ElectroMagn::view_t By, double dt,
+                   double dt_over_dy, double dt_over_dz)
+      : Ex(Ex), Jx(Jx), Bz(Bz), By(By), dt(dt), dt_over_dy(dt_over_dy),
+        dt_over_dz(dt_over_dz) {}
+
+  KOKKOS_FUNCTION void operator()(const int ix, const int iy,
+                                  const int iz) const {
+    Ex(ix, iy, iz) += -dt * Jx(ix, iy + 1, iz + 1) +
+                      dt_over_dy * (Bz(ix, iy + 1, iz) - Bz(ix, iy, iz)) -
+                      dt_over_dz * (By(ix, iy, iz + 1) - By(ix, iy, iz));
+  }
+};
+
+// Functor pour calculer Ey
+struct ComputeEyFunctor {
+  ElectroMagn::view_t Ey, Jy, Bz, Bx;
+  double dt, dt_over_dx, dt_over_dz;
+
+  ComputeEyFunctor(ElectroMagn::view_t Ey, ElectroMagn::view_t Jy,
+                   ElectroMagn::view_t Bz, ElectroMagn::view_t Bx, double dt,
+                   double dt_over_dx, double dt_over_dz)
+      : Ey(Ey), Jy(Jy), Bz(Bz), Bx(Bx), dt(dt), dt_over_dx(dt_over_dx),
+        dt_over_dz(dt_over_dz) {}
+
+  KOKKOS_FUNCTION void operator()(const int ix, const int iy,
+                                  const int iz) const {
+    Ey(ix, iy, iz) += -dt * Jy(ix + 1, iy, iz + 1) -
+                      dt_over_dx * (Bz(ix + 1, iy, iz) - Bz(ix, iy, iz)) +
+                      dt_over_dz * (Bx(ix, iy, iz + 1) - Bx(ix, iy, iz));
+  }
+};
+
+// Functor pour calculer Ez
+struct ComputeEzFunctor {
+  ElectroMagn::view_t Ez, Jz, By, Bx;
+  double dt, dt_over_dx, dt_over_dy;
+
+  ComputeEzFunctor(ElectroMagn::view_t Ez, ElectroMagn::view_t Jz,
+                   ElectroMagn::view_t By, ElectroMagn::view_t Bx, double dt,
+                   double dt_over_dx, double dt_over_dy)
+      : Ez(Ez), Jz(Jz), By(By), Bx(Bx), dt(dt), dt_over_dx(dt_over_dx),
+        dt_over_dy(dt_over_dy) {}
+
+  KOKKOS_FUNCTION void operator()(const int ix, const int iy,
+                                  const int iz) const {
+    Ez(ix, iy, iz) += -dt * Jz(ix + 1, iy + 1, iz) +
+                      dt_over_dx * (By(ix + 1, iy, iz) - By(ix, iy, iz)) -
+                      dt_over_dy * (Bx(ix, iy + 1, iz) - Bx(ix, iy, iz));
+  }
+};
+
+// Functor pour calculer Bx
+struct ComputeBxFunctor {
+  ElectroMagn::view_t Bx, Ez, Ey;
+  double dt_over_dy, dt_over_dz;
+
+  ComputeBxFunctor(ElectroMagn::view_t Bx, ElectroMagn::view_t Ez,
+                   ElectroMagn::view_t Ey, double dt_over_dy, double dt_over_dz)
+      : Bx(Bx), Ez(Ez), Ey(Ey), dt_over_dy(dt_over_dy), dt_over_dz(dt_over_dz) {
+  }
+
+  KOKKOS_FUNCTION void operator()(const int ix, const int iy,
+                                  const int iz) const {
+    Bx(ix, iy, iz) += -dt_over_dy * (Ez(ix, iy, iz) - Ez(ix, iy - 1, iz)) +
+                      dt_over_dz * (Ey(ix, iy, iz) - Ey(ix, iy, iz - 1));
+  }
+};
+
+// Functor pour calculer By
+struct ComputeByFunctor {
+  ElectroMagn::view_t By, Ex, Ez;
+  double dt_over_dz, dt_over_dx;
+
+  ComputeByFunctor(ElectroMagn::view_t By, ElectroMagn::view_t Ex,
+                   ElectroMagn::view_t Ez, double dt_over_dz, double dt_over_dx)
+      : By(By), Ex(Ex), Ez(Ez), dt_over_dz(dt_over_dz), dt_over_dx(dt_over_dx) {
+  }
+
+  KOKKOS_FUNCTION void operator()(const int ix, const int iy,
+                                  const int iz) const {
+    By(ix, iy, iz) += -dt_over_dz * (Ex(ix, iy, iz) - Ex(ix, iy, iz - 1)) +
+                      dt_over_dx * (Ez(ix, iy, iz) - Ez(ix - 1, iy, iz));
+  }
+};
+
+// Functor pour calculer Bz
+struct ComputeBzFunctor {
+  ElectroMagn::view_t Bz, Ey, Ex;
+  double dt_over_dx, dt_over_dy;
+
+  ComputeBzFunctor(ElectroMagn::view_t Bz, ElectroMagn::view_t Ey,
+                   ElectroMagn::view_t Ex, double dt_over_dx, double dt_over_dy)
+      : Bz(Bz), Ey(Ey), Ex(Ex), dt_over_dx(dt_over_dx), dt_over_dy(dt_over_dy) {
+  }
+
+  KOKKOS_FUNCTION void operator()(const int ix, const int iy,
+                                  const int iz) const {
+    Bz(ix, iy, iz) += -dt_over_dx * (Ey(ix, iy, iz) - Ey(ix - 1, iy, iz)) +
+                      dt_over_dy * (Ex(ix, iy, iz) - Ex(ix, iy - 1, iz));
+  }
+};
 
 //! \brief Solve Maxwell equations to compute EM fields.
 //! \param[in] params Constant global parameters.
 //! \param[in] em Electromagnetic fields.
 void solve_maxwell(const Params &params, ElectroMagn &em) {
+  Kokkos::Profiling::pushRegion("solve_maxwell");
 
-  using ExecSpace = Kokkos::DefaultExecutionSpace;
-  using MemSpace = ExecSpace::memory_space;
-
-  const std::string _region_name = "solve_maxwell";
   const double dt = params.dt;
   const double dt_over_dx = params.dt * params.inv_dx;
   const double dt_over_dy = params.dt * params.inv_dy;
   const double dt_over_dz = params.dt * params.inv_dz;
 
-  /////     Solve Maxwell Ampere (E)
-  // Electric field Ex (d,p,p)
+  ElectroMagn::view_t Jx = em.Jx_m;
+  ElectroMagn::view_t Jy = em.Jy_m;
+  ElectroMagn::view_t Jz = em.Jz_m;
 
   ElectroMagn::view_t Ex = em.Ex_m;
   ElectroMagn::view_t Ey = em.Ey_m;
@@ -583,91 +812,58 @@ void solve_maxwell(const Params &params, ElectroMagn &em) {
   ElectroMagn::view_t By = em.By_m;
   ElectroMagn::view_t Bz = em.Bz_m;
 
-  ElectroMagn::hostview_t Ex_h = em.Ex_h_m;
-  ElectroMagn::hostview_t Ey_h = em.Ey_h_m;
-  ElectroMagn::hostview_t Ez_h = em.Ez_h_m;
+  typedef Kokkos::MDRangePolicy<Kokkos::DefaultExecutionSpace, Kokkos::Rank<3>>
+      mdrange_policy;
 
-  ElectroMagn::hostview_t Bx_h = em.Bx_h_m;
-  ElectroMagn::hostview_t By_h = em.By_h_m;
-  ElectroMagn::hostview_t Bz_h = em.Bz_h_m;
+  best_team_namespace::GraphUtils::graph_t graph =
+      best_team_namespace::GraphUtils::get_graph();
+  int hack_it = best_team_namespace::GraphUtils::get_it();
 
-  Kokkos::deep_copy(Ex, Ex_h);
-  Kokkos::deep_copy(Ey, Ey_h);
-  Kokkos::deep_copy(Ez, Ez_h);
-  Kokkos::deep_copy(Bx, Bx_h);
-  Kokkos::deep_copy(By, By_h);
-  Kokkos::deep_copy(Bz, Bz_h);
+  if (hack_it == 0) {
+    auto node_Ex = graph.root_node().then_parallel_for(
+        mdrange_policy({0, 0, 0}, {em.nx_d_m, em.ny_p_m, em.nz_p_m}),
+        ComputeExFunctor(Ex, Jx, Bz, By, dt, dt_over_dy, dt_over_dz));
 
-  // Electric field Ex (d,p,p)
-  Kokkos::parallel_for(
-      _region_name + "::compute Ex",
-      Kokkos::MDRangePolicy(ExecSpace{}, {0, 0, 0},
-                            {em.nx_d_m, em.ny_p_m, em.nz_p_m}),
-      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
-        Ex(ix, iy, iz) += -dt * em.Jx_m(ix, iy + 1, iz + 1) +
-                          dt_over_dy * (Bz(ix, iy + 1, iz) - Bz(ix, iy, iz)) -
-                          dt_over_dz * (By(ix, iy, iz + 1) - By(ix, iy, iz));
-      });
-  // Electric field Ey (p,d,p)
-  Kokkos::parallel_for(
-      _region_name + "::compute Ey",
-      Kokkos::MDRangePolicy(ExecSpace{}, {0, 0, 0},
-                            {em.nx_p_m, em.ny_d_m, em.nz_p_m}),
-      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
-        Ey(ix, iy, iz) += -dt * em.Jy_m(ix + 1, iy, iz + 1) -
-                          dt_over_dx * (Bz(ix + 1, iy, iz) - Bz(ix, iy, iz)) +
-                          dt_over_dz * (Bx(ix, iy, iz + 1) - Bx(ix, iy, iz));
-      });
-  // Electric field Ez (p,p,d)
-  Kokkos::parallel_for(
-      _region_name + "::compute Ez",
-      Kokkos::MDRangePolicy(ExecSpace{}, {0, 0, 0},
-                            {em.nx_p_m, em.ny_p_m, em.nz_d_m}),
-      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
-        Ez(ix, iy, iz) += -dt * em.Jz_m(ix + 1, iy + 1, iz) +
-                          dt_over_dx * (By(ix + 1, iy, iz) - By(ix, iy, iz)) -
-                          dt_over_dy * (Bx(ix, iy + 1, iz) - Bx(ix, iy, iz));
-      });
-  Kokkos::fence();
+    // Electric field Ey (p,d,p)
+    auto node_Ey = graph.root_node().then_parallel_for(
+        mdrange_policy({0, 0, 0}, {em.nx_p_m, em.ny_d_m, em.nz_p_m}),
+        ComputeEyFunctor(Ey, Jy, Bz, Bx, dt, dt_over_dx, dt_over_dz));
 
-  /////     Solve Maxwell Faraday (B)
+    // Electric field Ez (p,p,d)
+    auto node_Ez = graph.root_node().then_parallel_for(
+        mdrange_policy({0, 0, 0}, {em.nx_p_m, em.ny_p_m, em.nz_d_m}),
+        ComputeEzFunctor(Ez, Jz, By, Bx, dt, dt_over_dx, dt_over_dy));
 
-  // Magnetic field Bx (p,d,d)
-  Kokkos::parallel_for(
-      _region_name + "::compute Bx",
-      Kokkos::MDRangePolicy(ExecSpace{}, {0, 1, 1},
-                            {em.nx_p_m, em.ny_d_m - 1, em.nz_d_m - 1}),
-      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
-        Bx(ix, iy, iz) += -dt_over_dy * (Ez(ix, iy, iz) - Ez(ix, iy - 1, iz)) +
-                          dt_over_dz * (Ey(ix, iy, iz) - Ey(ix, iy, iz - 1));
-      });
-  // Magnetic field By (d,p,d)
-  Kokkos::parallel_for(
-      _region_name + "::compute By",
-      Kokkos::MDRangePolicy(ExecSpace{}, {1, 0, 1},
-                            {em.nx_d_m - 1, em.ny_p_m, em.nz_d_m - 1}),
-      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
-        By(ix, iy, iz) += -dt_over_dz * (Ex(ix, iy, iz) - Ex(ix, iy, iz - 1)) +
-                          dt_over_dx * (Ez(ix, iy, iz) - Ez(ix - 1, iy, iz));
-      });
-  // Magnetic field Bz (d,d,p)
-  Kokkos::parallel_for(
-      _region_name + "::compute Bz",
-      Kokkos::MDRangePolicy(ExecSpace{}, {1, 1, 0},
-                            {em.nx_d_m - 1, em.ny_d_m - 1, em.nz_p_m}),
-      KOKKOS_LAMBDA(const int &ix, const int &iy, const int &iz) {
-        Bz(ix, iy, iz) += -dt_over_dx * (Ey(ix, iy, iz) - Ey(ix - 1, iy, iz)) +
-                          dt_over_dy * (Ex(ix, iy, iz) - Ex(ix, iy - 1, iz));
-      });
-  Kokkos::fence();
+    // Magnetic field Bx (p,d,d)
+    auto node_Bx =
+        Kokkos::Experimental::when_all(node_Ey, node_Ez)
+            .then_parallel_for(
+                mdrange_policy({0, 1, 1},
+                               {em.nx_p_m, em.ny_d_m - 1, em.nz_d_m - 1}),
+                ComputeBxFunctor(Bx, Ez, Ey, dt_over_dy, dt_over_dz));
 
-  Kokkos::deep_copy(Ex_h, Ex);
-  Kokkos::deep_copy(Ey_h, Ey);
-  Kokkos::deep_copy(Ez_h, Ez);
-  Kokkos::deep_copy(Bx_h, Bx);
-  Kokkos::deep_copy(By_h, By);
-  Kokkos::deep_copy(Bz_h, Bz);
+    // Magnetic field By (d,p,d)
+    auto node_By =
+        Kokkos::Experimental::when_all(node_Ex, node_Ez)
+            .then_parallel_for(
+                mdrange_policy({1, 0, 1},
+                               {em.nx_d_m - 1, em.ny_p_m, em.nz_d_m - 1}),
+                ComputeByFunctor(By, Ex, Ez, dt_over_dz, dt_over_dx));
 
+    // Magnetic field Bz (d,d,p)
+    auto node_Bz =
+        Kokkos::Experimental::when_all(node_Ey, node_Ex)
+            .then_parallel_for(
+                mdrange_policy({1, 1, 0},
+                               {em.nx_d_m - 1, em.ny_d_m - 1, em.nz_p_m}),
+                ComputeBzFunctor(Bz, Ey, Ex, dt_over_dx, dt_over_dy));
+
+    graph.instantiate();
+  }
+
+  graph.submit();
+
+  Kokkos::Profiling::popRegion();
 } // end solve
 
 //! \brief Boundaries condition on the global grid.
@@ -897,6 +1093,7 @@ void solveBC(const Params &params, ElectroMagn &em) {
         });
 
     Kokkos::fence();
+
   } else if (params.boundary_condition == "reflective") {
 
     ElectroMagn::view_t Bx = em.Bx_m;
@@ -995,9 +1192,11 @@ void antenna(const Params &params, ElectroMagn &em,
              std::function<double(double, double, double)> profile, double x,
              double t) {
 
+  em.sync(minipic::device, minipic::host);
+
   ElectroMagn::hostview_t *J = &em.Jz_h_m;
 
-  const int ix = std::floor(
+  const int ix = Kokkos::floor(
       (x - params.inf_x - em.J_dual_zx_m * 0.5 * params.dx) / params.dx);
 
   const double yfs = 0.5 * params.Ly + params.inf_y;
@@ -1014,6 +1213,9 @@ void antenna(const Params &params, ElectroMagn &em,
       (*J)(ix, iy, iz) = profile(y, z, t);
     }
   }
+
+  em.sync(minipic::host, minipic::device);
+
 } // end antenna
 
 } // end namespace operators
