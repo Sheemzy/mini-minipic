@@ -7,6 +7,7 @@
 
 #include "Managers.hpp"
 #include "Operators.hpp"
+#include <Kokkos_Sort.hpp>
 
 using ExecSpace = Kokkos::DefaultExecutionSpace;
 using MemorySpace = ExecSpace::memory_space;
@@ -54,12 +55,11 @@ void iterate(const Params &params, ElectroMagn &em,
 
   ExecSpace execSpace{};
   Kokkos::Profiling::pushRegion("Cost Box A");
-
   const auto nx = params.nx_cells;
   const auto ny = params.ny_cells;
   const auto nz = params.nz_cells;
 
-  const auto ncells = nx * ny * nz;
+  const auto n_cells = nx * ny *nz; 
 
   const auto inv_dx = params.inv_dx;
   const auto inv_dy = params.inv_dy;
@@ -75,9 +75,9 @@ void iterate(const Params &params, ElectroMagn &em,
   Kokkos::deep_copy(particles[is].boxOff, 0);
   Kokkos::deep_copy(particles[is].tempA, 0);
   Kokkos::View<std::size_t*, Kokkos::MemoryTraits<Kokkos::Atomic>> boxOffA(particles[is].boxOff);
-  Kokkos::View<std::size_t*, Kokkos::MemoryTraits<Kokkos::Atomic>> tempA(particles[is].tempA);
 
   auto boxV = particles[is].boxVal;
+  auto boxA = particles[is].boxOff;
 
   auto x = particles[is].x_m;
   auto y = particles[is].y_m;
@@ -97,28 +97,28 @@ void iterate(const Params &params, ElectroMagn &em,
           const unsigned int iyp = Kokkos::floor(iyn);
           const unsigned int izp = Kokkos::floor(izn);
           const unsigned int boxglobIdx = ixp + nx * (iyp +  ny * izp);
-          boxOffA(boxglobIdx + 1)++;
+          boxV(part) = boxglobIdx;
+          boxOffA(boxglobIdx+1)++;
         }
       );
-  Kokkos::parallel_for(
-        "interpolate: for each particle in species",
-        Kokkos::RangePolicy<ExecSpace>(streams[is], 0, n_particles),
-        KOKKOS_LAMBDA(const int part) {
-          // Calculate normalized positions
-          const double ixn = x(part) * inv_dx;
-          const double iyn = y(part) * inv_dy;
-          const double izn = z(part) * inv_dz;
+    Kokkos::parallel_scan(
+        "Scan COO operator functor",
+        Kokkos::RangePolicy<ExecSpace>(streams[is], 0, boxOffA.extent(0)),
+        KOKKOS_LAMBDA(int64_t i, int64_t& partial_sum, bool is_final) {
+            partial_sum += boxA(i);
+            if (is_final) {
+              boxA(i) = partial_sum;
+            }
+        });
 
-          // Compute indexes in global primal grid
-          const unsigned int ixp = Kokkos::floor(ixn);
-          const unsigned int iyp = Kokkos::floor(iyn);
-          const unsigned int izp = Kokkos::floor(izn);
-          const unsigned int boxglobIdx = ixp + nx * (iyp +  ny * izp);
-          tempA(boxglobIdx)++;
-          const unsigned int offset = boxOffA(boxglobIdx);
-          boxV(offset+tempA(boxglobIdx)) = boxglobIdx;
-        }
-      );
+    using IdViewType = decltype(boxV);
+    using CompType = Kokkos::BinOp1D<IdViewType>;
+    using DeviceType = Kokkos::Device<ExecSpace, MemorySpace>;
+    Kokkos::fence();
+    Kokkos::BinSort<IdViewType, CompType, DeviceType, std::size_t>
+        bin_sort(boxV, CompType(n_particles, 0, n_cells), true /*sort within*/);
+    bin_sort.create_permute_vector();
+    auto permutationVector = bin_sort.get_permute_vector();
   } // Species loop
   Kokkos::fence();
   Kokkos::Profiling::popRegion();
