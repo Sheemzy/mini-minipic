@@ -125,6 +125,8 @@ else()
   FetchContent_MakeAvailable(kokkos)
 endif()
 
+find_package(ArborX 2.0.1 REQUIRED)
+
 # __________________________________________________________________
 # Create executable with options
 
@@ -152,4 +154,5 @@ target_link_libraries(
   mini-minipic
   PRIVATE
     Kokkos::kokkos
+    ArborX::ArborX
 )

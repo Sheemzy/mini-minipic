@@ -80,6 +80,11 @@ public:
   view_t Bz_m;
   hostview_t Bz_h_m;
 
+  //! Point to Box array
+  Kokkos::View<std::size_t *> boxVal;
+  Kokkos::View<std::size_t *> boxOff;
+  Kokkos::View<std::size_t *> tempA;
+
   //! This flag when false prevents the allocation of E and B fields
   bool with_electromagnetic_fields_m = true;
 

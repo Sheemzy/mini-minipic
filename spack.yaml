@@ -1,0 +1,23 @@
+spack:
+  definitions:
+    - compilers: [gcc@14]
+    - packages:
+        - cmake
+        - ninja
+        - gdb
+        - py-numpy
+        - kokkos@5.0.0 +cuda +openmp cuda_arch=86 cxxstd=20 +tuning +wrapper build_type=RelWithDebInfo +debug +debug_bounds_check
+        - kokkos-nvcc-wrapper@5.0.0
+        - arborx +cuda +openmp cuda_arch=86 cxxstd=20 build_type=RelWithDebInfo ~mpi
+        - kokkos-tools ~mpi +papi
+  concretizer:
+    unify: true
+  specs:
+    - cuda@12
+    - py-matplotlib@3.10.7
+    - py-pandas
+    - py-termcolor
+    - matrix:
+        - [$packages]
+        - [$%compilers]
+

@@ -29,9 +29,9 @@ void setup(Params &params) {
   params.inf_x = 0.;
   params.inf_y = 0.;
   params.inf_z = 0.;
-  params.sup_x = 32 * dx;
-  params.sup_y = 32 * dy;
-  params.sup_z = 32 * dz;
+  params.sup_x = 32 * dx * 2;
+  params.sup_y = 32 * dy * 2;
+  params.sup_z = 32 * dz * 2;
 
   params.nx_cells = static_cast<int>((params.sup_x - params.inf_x) / dx);
   params.ny_cells = static_cast<int>((params.sup_y - params.inf_y) / dy);
@@ -62,7 +62,7 @@ void setup(Params &params) {
                      temperature,
                      profile,
                      {v_drift, 0, 0},
-                     8,
+                     8 * 2,
                      "electron",
                      "cell");
 
