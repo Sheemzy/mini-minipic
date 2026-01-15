@@ -995,25 +995,68 @@ void antenna(const Params &params, ElectroMagn &em,
              std::function<double(double, double, double)> profile, double x,
              double t) {
 
-  ElectroMagn::hostview_t *J = &em.Jz_h_m;
+  Kokkos::Profiling::pushRegion("antenna: TOTAL");
 
-  const int ix = std::floor(
+  //em.sync(minipic::device, minipic::host);
+  const int ix = Kokkos::floor(
       (x - params.inf_x - em.J_dual_zx_m * 0.5 * params.dx) / params.dx);
 
   const double yfs = 0.5 * params.Ly + params.inf_y;
   const double zfs = 0.5 * params.Lz + params.inf_z;
 
-  for (std::size_t iy = 0; iy < J->extent(1); ++iy) {
-    for (std::size_t iz = 0; iz < J->extent(2); ++iz) {
+  //auto Jz_sv = Kokkos::subview(em.Jz_m, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
+  //auto Jz_h_sv = Kokkos::subview(em.Jz_h_m, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
+
+  Kokkos::View<double**, Kokkos::DefaultExecutionSpace> Jz_sv(
+    Kokkos::view_alloc(Kokkos::DefaultExecutionSpace(), Kokkos::WithoutInitializing, "Jz_sv"), 
+    em.Jz_m.extent(1), em.Jz_m.extent(2));
+
+  auto Jz_h_sv = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
+                                                   Kokkos::HostSpace{}, Jz_sv);
+
+  using mdrange_policy_h =
+      Kokkos::MDRangePolicy<Kokkos::DefaultHostExecutionSpace, Kokkos::Rank<2>>;
+  using mdrange_policy_d =
+      Kokkos::MDRangePolicy<Kokkos::DefaultExecutionSpace, Kokkos::Rank<2>>;
+
+  const auto J_dual_zy_m = em.J_dual_zy_m;
+  const auto J_dual_zz_m = em.J_dual_zz_m;
+  const auto dy = params.dy;
+  const auto dz = params.dz;
+  const auto inf_y = params.inf_y;
+  const auto inf_z = params.inf_z;
+
+  Kokkos::parallel_for(
+      "antenna Host",
+      mdrange_policy_h({0, 0}, {em.Jz_h_m.extent(1), em.Jz_h_m.extent(2)}),
+      [=](const int iy, const int iz) {
 
       const double y =
-          (iy - em.J_dual_zy_m * 0.5) * params.dy + params.inf_y - yfs;
+          (iy - J_dual_zy_m * 0.5) * dy + inf_y - yfs;
       const double z =
-          (iz - em.J_dual_zz_m * 0.5) * params.dz + params.inf_z - zfs;
+          (iz - J_dual_zz_m * 0.5) * dz + inf_z - zfs;
 
-      (*J)(ix, iy, iz) = profile(y, z, t);
-    }
-  }
+      Jz_h_sv(iy, iz) = profile(y, z, t);
+      }
+  );
+
+  Kokkos::deep_copy(Jz_sv, Jz_h_sv);
+
+  Kokkos::parallel_for(
+      "copy antenna Device",
+      mdrange_policy_d({0, 0}, {em.Jz_m.extent(1), em.Jz_m.extent(2)}),
+      KOKKOS_LAMBDA(const int iy, const int iz) {
+
+      em.Jz_m(ix, iy, iz) = Jz_sv(iy, iz);
+
+      }
+  );
+
+  //em.sync(minipic::host, minipic::device);
+  //Kokkos::deep_copy(Jz_sv, Jz_h_sv);
+
+  Kokkos::fence();
+  Kokkos::Profiling::popRegion();
+
 } // end antenna
-
 } // end namespace operators
